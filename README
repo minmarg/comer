@@ -1,0 +1,209 @@
+COMER software package for protein remote homology search
+(C)Mindaugas Margelevicius,VU Institute of Biotechnology,Vilnius
+
+Available Platforms
+===================
+
+   The COMER binaries are provided for the following platforms:
+
+  *  Linux x86 (32 bit)
+  *  Linux x64 (64 bit)
+
+Getting the COMER Software
+==========================
+
+   The package is available at
+
+   http://comer.sourceforge.net
+
+Structure of the Package
+========================
+
+   The main directories are shortly described below:
+
+  *  binaries  --  contains the built and locally installed COMER package
+     for Linux x86 (subdirectory, linux32), and Linux x64 (linux64).
+     You can distribute the subdirectories to your prefered path and 
+     consider it as the installation path.
+
+  *  src       --  is the main directory of the source files to be
+     compiled and linked into the executables (see Basic Installation
+     below).
+
+  *  optimized --  the compiled and linked source files for Linux x64.
+     It should be reconfigured and remade by make (see Basic 
+     Installation below) if you want to built the sources in this
+     directory.
+
+Basic Installation
+==================
+
+   These are generic installation instructions.
+
+   The `configure' shell script attempts to guess correct values for
+various system-dependent variables used during compilation.  It uses
+those values to create a `Makefile' in each directory of the package.
+It may also create one or more `.h' files containing system-dependent
+definitions.  Finally, it creates a shell script `config.status' that
+you can run in the future to recreate the current configuration, a file
+`config.cache' that saves the results of its tests to speed up
+reconfiguring, and a file `config.log' containing compiler output
+(useful mainly for debugging `configure').
+
+   The file `configure.in' is used to create `configure' by a program
+called `autoconf'.  You only need `configure.in' if you want to change
+it or regenerate `configure' using a newer version of `autoconf'.
+
+The basic way to compile this package is:
+
+  0. Optionally, you may want to regenerate `configure' and other related
+     files by running the command (requires autoconf and automake):
+
+     make -f Makefile.cvs
+
+  1. Make a new directory to keep the compiled and linked sources and
+     `cd' to that directory:
+
+     mkdir built; cd built
+
+     Configure the package for your system giving your installation
+     path where the package will be installed after compilation:
+
+     ../configure --prefix=/your/installation/path/here
+
+     The COMER package contains MPI-dependent programs for parallel 
+     calculations. The programs are built optionally but requires the 
+     MPI (openmpi) package installed in your system. If you have MPI and
+     want to built these programs, configure the package as follows:
+
+     ../configure --prefix=/your/installation/path/here  mpi=yes
+
+     If you're using `csh' or an old version of System V, you might
+     need to type `sh ../configure' instead to prevent `csh' from
+     trying to execute `configure' itself.
+
+     Running `configure' takes a while. While running, it prints some
+     messages telling which features it is checking for.
+
+  2. Type `make echo=echo' to compile the package.
+
+  3. Type `make echo=echo install' to install the programs and data files.
+
+   For more information, see the INSTALL file.
+
+Getting Started
+===============
+
+   There are three main programs sufficient for making profiles,
+profile databases, and running of the COMER method itself. These
+programs, `makepro', `makedb', and `comer', respectively, are in the
+bin directory in your installation path.
+
+   If you have a profile database (see Custom Databases below) and an
+input multiple alignment file in the FASTA or STOCKHOLM format (see 
+below), the simplest way to run `comer' is to type (names within 
+brackets <> depends on your naming choice) for example:
+
+     bin/comer -i <myinput.fa> -d <mydb> -o <output>
+
+   It is convenient, however, to have an input multiple alignment
+converted to the profile, especially in cases when `comer' is to be run
+many times with that multiple alignment. To make the profile from the
+multiple alignment, type:
+
+     bin/makepro    -i <myinput.fa> -o <myinput.pro>   or
+     bin/makepro.sh -i <myinput.fa> -o <myinput.pro>
+
+The latter command includes secondary structure predictions (you will
+need PSIPRED installed on your system to accomplish that).
+
+   After the profile is made, it can be used as input to `comer':
+
+     bin/comer -i <myinput.pro> -d <mydb> -o <output>
+
+   If you want to mutually compare two profiles or multiple alignments,
+you can indicate another profile or multiple alignment instead of
+database name:
+
+     bin/comer -i <myinput.pro> -d <another.pro> -o <output>
+
+   The COMER search can be controlled with options read from a separate
+file:
+
+     bin/comer -i <myinput.pro> -d <another.pro> -o <output> -p <options>
+
+   By default, the COMER options are read from file `var/options.txt'.
+
+Input Multiple Alignment
+========================
+
+   The programs in the package, processing input multiple alignment 
+files (`comer', `makepro', etc.) recognize the FASTA and STOCKHOLM 
+formats.
+
+   Each sequence in the multiple alignment in FASTA begins with a
+single-line description, followed by lines of sequence data. The
+description line is distinguished from the sequence data by the
+greater-than (`>') symbol in the first column. An example of a
+multiple alignment in FASTA:
+
+>d1qhka_ d.100.1.2 (A:) N-terminal domain of RNase HI...
+GNFYAVRKGRE--T---G--------IYNTW---NECKNQVDGYG---GAIYKKFNSYEQAKSFLG
+>gi|28379120|ref|NP_786012.1|:(2-47) ribonuclease H (putative)...
+-KYYAVRKGRQ--P---G--------IYRTW---PETQKQVSGYP---QAQYKSFTSEKDAQDFMA
+>gi|84386727|ref|ZP_00989753.1|:(2-47) hypothetical ribonuclease HI...
+-KYYVVWKGRT--P---G--------IFTTW---NECKSQVDGFA---GARYKSFPTLGEAESAFG
+>gi|116492108|ref|YP_803843.1|:(2-47) RNase H with double-stranded...
+-KFYAVKKGRK--P---G--------LYLTW---DAAKQQVDGFA---GAVYKSFLTKAEAEEWMA
+>gi|6323890|ref|NP_013961.1|:(1-47) Ribonuclease H1...
+GNFYAVRKGRE--T---G--------IYNTW---NECKNQVDGYG---GAIYKKFNSYEQAKSFLG
+
+   If you're a BLAST user and/or want to compose input multiple
+alignment from (PSI-)BLAST output, you can do that by typing:
+
+     bin/blast2fa.pl -i <myblast.aln> -o <myinput.fa>
+
+   where <myblast.aln> is a BLAST output file of pairwise
+alignments, and resulting <myinput.fa> is the multiple alignment in
+FASTA ready to be converted to profile:
+
+     bin/makepro -i <myinput.fa> -o <myinput.pro>
+
+Custom Databases
+================
+
+   If you have a set of profiles constructed by `makepro' and want to
+assemble them into the profile database to search against with `comer',
+use the `makedb' program:
+
+     bin/makedb -o <mydb>  <profil1.pro> <profile2.pro> <profile3.pro>
+
+   Alternatively, you can use wildcards to indicate a set of profiles:
+
+     bin/makedb -o <mydb>  *.pro
+
+   Or, if your profies are all in one directory, you may want to
+point out the directory the profiles should be read from:
+
+     bin/makedb -o <mydb> -d <mydirectory>
+
+   It is IMPORTANT to note that the database will consist of several
+files. The files will have exactly the same names as given by
+option `-o'. Thus, the parameter names used in `makedb' and `comer'
+should be the same. It is convenient not to use extensions in these
+names. The `comer' search against the database may be started by typing:
+
+     bin/comer -i <myinput.pro> -d <mydb> -o <output>
+
+References
+==========
+
+Margelevicius M. (2016) Bayesian nonparametrics in protein remote 
+homology search. Bioinformatics 32(18), 2744–2752.
+
+Margelevicius M. (2017) Low-complexity add-on scores for protein 
+remote homology search with COMER.
+
+--
+mindaugas.margelevicius@bti.vu.lt
+

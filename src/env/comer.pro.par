@@ -1,0 +1,31 @@
+## Control and statistical parameters for distinct gap penalty schemes
+##
+## Ungapped scheme
+##
+[UNGAPPED]
+Lambda = 0.277665
+K = 0.109444
+H = 0.840683
+Alpha = 0.231329
+Beta = 3.14645
+Scale-factor = 1.000000
+
+## Various gapped schemes below
+##
+[GAPPED_A_1]
+Gap-open-cost = A
+Gap-extension-cost = 1
+Lambda = 0.141208
+K = 0.004512
+H = 0.681647
+Alpha = 0.072640
+Beta = 4.29476
+
+[GAPPED_A_2]
+Gap-open-cost = A
+Gap-extension-cost = 2
+Lambda = 0.173192
+K = 0.040751
+H = 0.752515
+Alpha = 0.082110
+Beta = 5.47565

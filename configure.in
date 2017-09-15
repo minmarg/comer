@@ -1,0 +1,36 @@
+AC_INIT(configure.in)
+
+AM_CONFIG_HEADER(config.h)
+AM_INIT_AUTOMAKE(comer, 1.03)
+
+AC_LANG_CPLUSPLUS
+AC_PROG_CXX
+AM_PROG_LIBTOOL
+
+AM_CONDITIONAL([COND_MPI], [test "$mpi" = yes])
+
+AC_OUTPUT(Makefile \
+	src/Makefile \
+	src/blast2fa/Makefile \
+	src/comer/Makefile \
+	src/env/Makefile \
+	src/ext/Makefile \
+	src/liblib/Makefile \
+	src/libhsh/Makefile \
+	src/libseg/Makefile \
+	src/libpro/Makefile \
+	src/lmpi/Makefile \
+	src/libHDP/Makefile \
+	src/HDPres/Makefile \
+	src/smpl/Makefile \
+	src/sort/Makefile \
+	src/root/Makefile \
+	src/makedb/Makefile \
+	src/makepro/Makefile \
+	src/genpro/Makefile \
+	src/genmsa/Makefile \
+	src/rndmsa/Makefile \
+	src/mpiscaler/Makefile \
+	src/pcluster/Makefile \
+	src/pscores/Makefile \
+	src/segpro/Makefile)

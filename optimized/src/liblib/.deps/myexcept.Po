@@ -1,0 +1,30 @@
+myexcept.o: ../../../src/liblib/myexcept.cpp \
+ ../../../src/liblib/myexcept.h ../../../src/liblib/debug.h \
+ ../../../src/liblib/mystring.h /usr/include/string.h \
+ /usr/include/features.h /usr/include/sys/cdefs.h \
+ /usr/include/bits/wordsize.h /usr/include/gnu/stubs.h \
+ /usr/include/gnu/stubs-64.h \
+ /home/mindaugas/lib/gcc/x86_64-pc-linux-gnu/7.1.0/include/stddef.h \
+ /usr/include/xlocale.h
+
+../../../src/liblib/myexcept.h:
+
+../../../src/liblib/debug.h:
+
+../../../src/liblib/mystring.h:
+
+/usr/include/string.h:
+
+/usr/include/features.h:
+
+/usr/include/sys/cdefs.h:
+
+/usr/include/bits/wordsize.h:
+
+/usr/include/gnu/stubs.h:
+
+/usr/include/gnu/stubs-64.h:
+
+/home/mindaugas/lib/gcc/x86_64-pc-linux-gnu/7.1.0/include/stddef.h:
+
+/usr/include/xlocale.h:

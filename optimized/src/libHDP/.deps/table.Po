@@ -1,0 +1,215 @@
+table.o: ../../../src/libHDP/table.cpp \
+ /home/mindaugas/include/c++/7.1.0/math.h \
+ /home/mindaugas/include/c++/7.1.0/cmath \
+ /home/mindaugas/include/c++/7.1.0/x86_64-pc-linux-gnu/bits/c++config.h \
+ /home/mindaugas/include/c++/7.1.0/x86_64-pc-linux-gnu/bits/os_defines.h \
+ /usr/include/features.h /usr/include/sys/cdefs.h \
+ /usr/include/bits/wordsize.h /usr/include/gnu/stubs.h \
+ /usr/include/gnu/stubs-64.h \
+ /home/mindaugas/include/c++/7.1.0/x86_64-pc-linux-gnu/bits/cpu_defines.h \
+ /home/mindaugas/include/c++/7.1.0/bits/cpp_type_traits.h \
+ /home/mindaugas/include/c++/7.1.0/ext/type_traits.h /usr/include/math.h \
+ /usr/include/bits/huge_val.h /usr/include/bits/huge_valf.h \
+ /usr/include/bits/huge_vall.h /usr/include/bits/inf.h \
+ /usr/include/bits/nan.h /usr/include/bits/mathdef.h \
+ /usr/include/bits/mathcalls.h /usr/include/bits/mathinline.h \
+ /home/mindaugas/include/c++/7.1.0/bits/std_abs.h /usr/include/stdlib.h \
+ /home/mindaugas/lib/gcc/x86_64-pc-linux-gnu/7.1.0/include/stddef.h \
+ /usr/include/bits/waitflags.h /usr/include/bits/waitstatus.h \
+ /usr/include/endian.h /usr/include/bits/endian.h \
+ /usr/include/bits/byteswap.h /usr/include/xlocale.h \
+ /usr/include/sys/types.h /usr/include/bits/types.h \
+ /usr/include/bits/typesizes.h /usr/include/time.h \
+ /usr/include/sys/select.h /usr/include/bits/select.h \
+ /usr/include/bits/sigset.h /usr/include/bits/time.h \
+ /usr/include/sys/sysmacros.h /usr/include/bits/pthreadtypes.h \
+ /usr/include/alloca.h /usr/include/stdio.h /usr/include/libio.h \
+ /usr/include/_G_config.h /usr/include/wchar.h \
+ /home/mindaugas/lib/gcc/x86_64-pc-linux-gnu/7.1.0/include/stdarg.h \
+ /usr/include/bits/stdio_lim.h /usr/include/bits/sys_errlist.h \
+ /usr/include/bits/stdio.h /home/mindaugas/include/c++/7.1.0/stdlib.h \
+ /home/mindaugas/include/c++/7.1.0/cstdlib /usr/include/string.h \
+ ../../../src/libHDP/table.h ../../../src/liblib/rc.h \
+ ../../../src/liblib/mystring.h ../../../src/liblib/debug.h \
+ ../../../src/liblib/myexcept.h ../../../src/liblib/platform.h \
+ ../../../src/liblib/defines.h ../../../src/liblib/faccess.h \
+ ../../../src/liblib/pcmath.h ../../../src/liblib/myexcept.h \
+ ../../../src/ext/pslvector.h ../../../src/ext/pslcodes.h \
+ ../../../src/libHDP/basin.h ../../../src/libHDP/menu.h \
+ ../../../src/libHDP/hdplib.h \
+ /home/mindaugas/lib/gcc/x86_64-pc-linux-gnu/7.1.0/include/float.h \
+ ../../../src/ext/psl.h \
+ /home/mindaugas/lib/gcc/x86_64-pc-linux-gnu/7.1.0/include-fixed/limits.h \
+ /home/mindaugas/lib/gcc/x86_64-pc-linux-gnu/7.1.0/include-fixed/syslimits.h \
+ /usr/include/limits.h /usr/include/bits/posix1_lim.h \
+ /usr/include/bits/local_lim.h /usr/include/linux/limits.h \
+ /usr/include/bits/posix2_lim.h /usr/include/bits/xopen_lim.h \
+ ../../../src/ext/ivector.h ../../../src/ext/spdmatrix.h \
+ ../../../src/ext/nsmatrix.h ../../../src/ext/pslmatrix.h \
+ ../../../src/ext/pslvector.h ../../../src/libHDP/dish.h
+
+/home/mindaugas/include/c++/7.1.0/math.h:
+
+/home/mindaugas/include/c++/7.1.0/cmath:
+
+/home/mindaugas/include/c++/7.1.0/x86_64-pc-linux-gnu/bits/c++config.h:
+
+/home/mindaugas/include/c++/7.1.0/x86_64-pc-linux-gnu/bits/os_defines.h:
+
+/usr/include/features.h:
+
+/usr/include/sys/cdefs.h:
+
+/usr/include/bits/wordsize.h:
+
+/usr/include/gnu/stubs.h:
+
+/usr/include/gnu/stubs-64.h:
+
+/home/mindaugas/include/c++/7.1.0/x86_64-pc-linux-gnu/bits/cpu_defines.h:
+
+/home/mindaugas/include/c++/7.1.0/bits/cpp_type_traits.h:
+
+/home/mindaugas/include/c++/7.1.0/ext/type_traits.h:
+
+/usr/include/math.h:
+
+/usr/include/bits/huge_val.h:
+
+/usr/include/bits/huge_valf.h:
+
+/usr/include/bits/huge_vall.h:
+
+/usr/include/bits/inf.h:
+
+/usr/include/bits/nan.h:
+
+/usr/include/bits/mathdef.h:
+
+/usr/include/bits/mathcalls.h:
+
+/usr/include/bits/mathinline.h:
+
+/home/mindaugas/include/c++/7.1.0/bits/std_abs.h:
+
+/usr/include/stdlib.h:
+
+/home/mindaugas/lib/gcc/x86_64-pc-linux-gnu/7.1.0/include/stddef.h:
+
+/usr/include/bits/waitflags.h:
+
+/usr/include/bits/waitstatus.h:
+
+/usr/include/endian.h:
+
+/usr/include/bits/endian.h:
+
+/usr/include/bits/byteswap.h:
+
+/usr/include/xlocale.h:
+
+/usr/include/sys/types.h:
+
+/usr/include/bits/types.h:
+
+/usr/include/bits/typesizes.h:
+
+/usr/include/time.h:
+
+/usr/include/sys/select.h:
+
+/usr/include/bits/select.h:
+
+/usr/include/bits/sigset.h:
+
+/usr/include/bits/time.h:
+
+/usr/include/sys/sysmacros.h:
+
+/usr/include/bits/pthreadtypes.h:
+
+/usr/include/alloca.h:
+
+/usr/include/stdio.h:
+
+/usr/include/libio.h:
+
+/usr/include/_G_config.h:
+
+/usr/include/wchar.h:
+
+/home/mindaugas/lib/gcc/x86_64-pc-linux-gnu/7.1.0/include/stdarg.h:
+
+/usr/include/bits/stdio_lim.h:
+
+/usr/include/bits/sys_errlist.h:
+
+/usr/include/bits/stdio.h:
+
+/home/mindaugas/include/c++/7.1.0/stdlib.h:
+
+/home/mindaugas/include/c++/7.1.0/cstdlib:
+
+/usr/include/string.h:
+
+../../../src/libHDP/table.h:
+
+../../../src/liblib/rc.h:
+
+../../../src/liblib/mystring.h:
+
+../../../src/liblib/debug.h:
+
+../../../src/liblib/myexcept.h:
+
+../../../src/liblib/platform.h:
+
+../../../src/liblib/defines.h:
+
+../../../src/liblib/faccess.h:
+
+../../../src/liblib/pcmath.h:
+
+../../../src/liblib/myexcept.h:
+
+../../../src/ext/pslvector.h:
+
+../../../src/ext/pslcodes.h:
+
+../../../src/libHDP/basin.h:
+
+../../../src/libHDP/menu.h:
+
+../../../src/libHDP/hdplib.h:
+
+/home/mindaugas/lib/gcc/x86_64-pc-linux-gnu/7.1.0/include/float.h:
+
+../../../src/ext/psl.h:
+
+/home/mindaugas/lib/gcc/x86_64-pc-linux-gnu/7.1.0/include-fixed/limits.h:
+
+/home/mindaugas/lib/gcc/x86_64-pc-linux-gnu/7.1.0/include-fixed/syslimits.h:
+
+/usr/include/limits.h:
+
+/usr/include/bits/posix1_lim.h:
+
+/usr/include/bits/local_lim.h:
+
+/usr/include/linux/limits.h:
+
+/usr/include/bits/posix2_lim.h:
+
+/usr/include/bits/xopen_lim.h:
+
+../../../src/ext/ivector.h:
+
+../../../src/ext/spdmatrix.h:
+
+../../../src/ext/nsmatrix.h:
+
+../../../src/ext/pslmatrix.h:
+
+../../../src/ext/pslvector.h:
+
+../../../src/libHDP/dish.h:
