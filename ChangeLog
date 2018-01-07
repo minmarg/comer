@@ -5,3 +5,5 @@ with any features in the sequence annotation field
 1.04.01, September 2017  *  More accurate representation of data in STOCKHOLM;
 Changes of types of several variables to compile with the most recent versions
 of gcc
+1.04.02, January 2018    *  HDP-based and context scores recalculated based on
+sampled folds
