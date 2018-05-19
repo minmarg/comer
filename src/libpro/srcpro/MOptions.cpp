@@ -73,6 +73,8 @@ void MOptions::Init()
     valSSSWGT_ = defSSSWGT;
     valSSSHDP_ = defSSSHDP;
 
+    valSSEMODEL_ = defSSEMODEL;
+
     valINFCON_ = defINFCON;
     valMASKAFTER_ = defMASKAFTER;
     valSCALEDOWN_ = defSCALEDOWN;
@@ -160,6 +162,8 @@ void MOptions::Read()
 
     ReadSSSWGT();
     ReadSSSHDP();
+
+    ReadSSEMODEL();
 
     ReadINFCON();
     ReadMASKAFTER();
@@ -381,6 +385,17 @@ void MOptions::ReadSSSHDP()
         throw myruntime_error("Regularizer of SS scores is not in interval [0-1).");
     valSSSHDP_ = value;
 }
+
+// model for the estimation of statistical significance
+//
+void MOptions::ReadSSEMODEL()
+{
+    MOPTPRIV_INT_KEY( SSEMODEL );
+    if( value < 0 || 2 < value )
+        throw myruntime_error("Invalid index of a model for the estimation of statistical significance.");
+    valSSEMODEL_ = value;
+}
+
 
 // Masking options
 //

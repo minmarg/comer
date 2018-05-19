@@ -459,12 +459,13 @@ void MSAGenerator::GenerateMSAFrag( const char* name, mystring** msa, int width 
     if( GetNoMSAs() < 1 )
         return;
 
-    const int   lenerr = 5;
+    const int   lenerr = 0;//5;
     const int   lcnFRAG = GetFragLength();//fragment length
     int         length = GetLengthToGenerate();
-    int lc = -lcnFRAG, lp = 0, cnt = 0;
+    int         frag = SLC_MIN( lcnFRAG, length );
+    int lc = 0, lp = 0, cnt = 0;
 
-    while(( lc += lcnFRAG ) < length - lenerr ) {
+    while( lc < length - lenerr ) {
         if( lc == lp )
             cnt++;
         else
@@ -472,19 +473,22 @@ void MSAGenerator::GenerateMSAFrag( const char* name, mystring** msa, int width 
         if( 10 <= cnt )
             throw myruntime_error("MSAGenerator: GenerateMSAFrag: Live lock in generating an MSA.");
         lp = lc;
-        AddFrag( name, msa, width );
+        if( lenerr == 0 && length <= lc + frag )
+            frag = length - lc;
+        AddFrag( name, msa, width, frag );
+        lc += frag;
     }
 }
 
 // -------------------------------------------------------------------------
 // AddFrag: add alignment fragment to the MSA being generated
 //
-void MSAGenerator::AddFrag( const char* name, mystring** msa, int width )
+void MSAGenerator::AddFrag( const char* name, mystring** msa, int width, int frag )
 {
     if( msa == NULL )
         throw myruntime_error("MSAGenerator: AddFrag: Null arguments.");
 
-    const int   lcnFRAG = GetFragLength();//fragment length
+    const int   lcnFRAG = frag;//GetFragLength();//fragment length
     const mystring** srcmsa = NULL;//source MSA
     const Ivector*   srcsv = NULL;//source state vector 
     int         srcwdt = 0;//width of source MSA

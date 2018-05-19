@@ -81,6 +81,26 @@ public:
         dAll = dMM | dMI | dIM | dDG | dGD,
         noDirections
     };
+    //models for statistical significance estimation
+    enum SS18models{
+        mss18_unused,//model SS18 not used, use previous version 
+        mss18_1,//statistics based on profile attributes and compositional similarity
+        mss18_2,//same as mss18_1 but regarding the amount data used in simulations (1e-4, expect)
+        noSS18models
+    };
+    //pseudo hyperparameters for a model for statistical significance estimation
+    enum SS18hypers{
+        ss18muE_S,//slope for muE
+        ss18muE_I,//intercept for muE
+        ss18muR_S,//slope for muR
+        ss18muR_I,//intercept for muR
+        ss18scaleE_S,//slope for scaleE
+        ss18scaleE_I,//intercept for scaleE
+        ss18scaleR_F,//factor for scaleR
+        ss18alpha,//contribution weight of muE to mu
+        ss18ibeta,//contribution weight of scaleR to scale
+        noSS18hypers
+    };
 
     ProfileAlignment(
             const FrequencyMatrix& freq_fst, const LogOddsMatrix& logo_fst, const GapScheme& gaps_fst,
@@ -90,6 +110,9 @@ public:
     );
 
     virtual ~ProfileAlignment();
+
+    void                        SetModelSS18( int mod );
+    int                         GetModelSS18() const { return modelSS18_; }
 
     virtual void                Run( size_t );
     void                        MARealign();
@@ -156,6 +179,40 @@ protected:
     virtual void                SetFinalScore( double value );
     virtual void                MakeAlignmentPath();
     void                        ComputeStatistics();
+    void                        ComputeStatisticsObs();
+    void                        ComputeStatisticsSS18();
+    void                        ComputeStatisticsHelper( 
+                                    double qnos, int qlen, double snos, int slen, 
+                                    double red, double lmbd, int idns,
+                                    double* mu, double* scale );
+    void                        ComputeKrefStatisticsHelper(
+                                    double qnos, int qlen, double snos, int slen,
+                                    double red, double K,
+                                    double* Kref );
+    void                        ComputeLambdaStatisticsHelper( 
+                                    double qnos, int qlen, double snos, int slen, 
+                                    double red, double lmbd, 
+                                    double* shape, double* rate );
+    void                        ComputeIdnsStatisticsHelper( 
+                                    double qnos, int qlen, double snos, int slen, 
+                                    double red, double lmbd, 
+                                    double* shape, double* prob );
+    void                        ComputePstsStatisticsHelper( 
+                                    double qnos, int qlen, double snos, int slen, 
+                                    double red, double lmbd, 
+                                    double* shape, double* prob );
+    void                        ComputeExpectHelper( 
+                                    double qnos, int qlen, double snos, int slen, 
+                                    double red, double lmbd, int idns, 
+                                    double score, double* expect );
+    void                        ComputeExpectHelper2( 
+                                    double qnos, int qlen, double snos, int slen, 
+                                    double red, 
+                                    double score, double* expect );
+    void                        ComputeMixtureExpect( 
+                                    double qnos, int qlen, double snos, int slen, 
+                                    double red, double lmbd, 
+                                    double score, double* expect );
     void                        ComputeStatisticsTEST( size_t );
     static double               ProbProduct( double term1, double term2, bool apply );
     static double               LogOfProduct( double term1, double term2, bool apply );
@@ -217,6 +274,8 @@ protected:
     const AbstractScoreMatrix*  scoreSystem;    //score system used to align profiles
 
 private:
+    int         modelSS18_;                 //model for SS estimation, 18
+    const double* hypersSS18_;              //pseudo hyperparameters for model SS18
     StatModel   model;                      //statistical model
     double      bitscore;                   // bit score of alignment
     double      ref_expectation;            // reference expectation for the case expected score per position is positive
@@ -289,7 +348,9 @@ inline
 double ProfileAlignment::ComputePvalue( double expect )
 {
     if( expect < 0.0 )
-        throw myruntime_error( "ProfileAlignment: Expect value is negative." );
+        throw myruntime_error( "ProfileAlignment: ComputePvalue: Expect value is negative." );
+    if( expect < 0.01 )
+        return expect;
     return 1.0 - exp( -expect );
 }
 

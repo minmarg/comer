@@ -54,7 +54,7 @@ protected:
     void    ReadInMSA( const char* filename, void* );//read in alignment
     void    GenerateMSA( const char* fname, const char* name );
     void    GenerateMSAFrag( const char* name, mystring**, int width );
-    void    AddFrag( const char* name, mystring**, int width );
+    void    AddFrag( const char* name, mystring**, int width, int frag );
     void    AddColumn( const char* name, int pp, const mystring**, const int, mystring**, int );
 
     const char* GetOutputDir() const { return outdir_; }

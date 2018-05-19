@@ -56,6 +56,8 @@ public:
     double          GetSSSWGT() const { return valSSSWGT_; }
     double          GetSSSHDP() const { return valSSSHDP_; }
 
+    int             GetSSEMODEL() const { return valSSEMODEL_; }
+
     double          GetINFCON() const { return valINFCON_; }
     int             GetMASKAFTER() const { return valMASKAFTER_; }
     double          GetSCALEDOWN() const { return 1.0 - ( double )valSCALEDOWN_ / 100.0; }
@@ -138,6 +140,8 @@ protected:
     void            ReadSSSWGT();
     void            ReadSSSHDP();
 
+    void            ReadSSEMODEL();
+
     void            ReadINFCON();
     void            ReadMASKAFTER();
     void            ReadSCALEDOWN();
@@ -211,6 +215,8 @@ private:
 
     double      valSSSWGT_;
     double      valSSSHDP_;
+
+    int         valSSEMODEL_;
 
     double      valINFCON_;
     int         valMASKAFTER_;
@@ -293,6 +299,10 @@ private:
 #define defSSSWGT ( 0.12 )
 #define defSSSHDP ( 0.01 )
 
+
+#define defSSEMODEL ( 1 )
+
+
 #define defINFCON ( 0 )
 #define defMASKAFTER ( 0 )
 #define defSCALEDOWN ( 50 )
@@ -374,6 +384,8 @@ static const char*  CVSWGT = "CVSWGT";
 
 static const char*  SSSWGT = "SSSWGT";
 static const char*  SSSHDP = "SSSHDP";
+
+static const char*  SSEMODEL = "SSEMODEL";
 
 static const char*  INFCON = "INFCON";
 static const char*  MASKAFTER = "MASKAFTER";

@@ -13,7 +13,7 @@
 //         enriched SS format
 
 
-static const char*  version = "1.04";
+static const char*  version = "1.05";
 static const char*  verdate = "";
 
 static const char*  makeinst = "\n\

@@ -302,10 +302,12 @@ void ProGenerator::GenerateProfile( const char* outfilename, const char* name )
 
     if( GetOperateWithSSE())
         GenerateProfileSSE( name, &genfreq, &genpssm, &gengaps );
+//         GenerateProfileSSEtest( name, &genfreq, &genpssm, &gengaps );
     else
         GenerateProfileFrag( name, &genfreq, &genpssm, &gengaps );
 
     RecalcBgProbs( &genfreq, &genpssm, &gengaps );
+    RecalcPostProbs( &genfreq, &genpssm, &gengaps );
 
     serializer.WriteProfile( outfilename, genfreq, genpssm, gengaps );
 }
@@ -323,7 +325,7 @@ void ProGenerator::GenerateProfileFrag( const char* name,
     if( GetNoProfiles() < 1 )
         return;
 
-    const int   lenerr = 5;
+    const int   lenerr = 0;//5;
     int         length = GetLengthToGenerate();
     int lc = 0, lp = 0, cnt = 0;
 
@@ -392,7 +394,7 @@ void ProGenerator::AddFrag( const char* name,
         return;//too short profile
 
     //copy profile fragment
-    for( ii = 0; pp < lenpssm && ii < lcnFRAG; pp++, ii++ )
+    for( ii = 0; pp < lenpssm && ii < lcnFRAG && genpssm->GetColumns() < length; pp++, ii++ )
         AddColumn( name, pp, freq, pssm, gaps, genfreq, genpssm, gengaps );
 }
 
@@ -410,7 +412,7 @@ void ProGenerator::GenerateProfileSSE( const char* name,
     if( GetNoProfiles() < 1 )
         return;
 
-    const int   lenerr = 5;
+    const int   lenerr = 0;//5;
     int         length = GetLengthToGenerate();
     size_t  nopros = GetNoProfiles();
     double  urv = rng_p_.GetDouble();
@@ -451,6 +453,72 @@ void ProGenerator::GenerateProfileSSE( const char* name,
             pssm = GetProPSSMAt(ind);
             if( pssm == NULL )
                 throw myruntime_error("ProGenerator: GenerateProfileSSE: Null profile.");
+            pp = 0;
+        }
+    }
+}
+
+// -------------------------------------------------------------------------
+// GenerateProfileSSEtest: generate a profile operating with SS elements;
+//  NOTE: testing an algorithm
+//
+void ProGenerator::GenerateProfileSSEtest( const char* name, 
+    FrequencyMatrix* genfreq, LogOddsMatrix* genpssm, GapScheme* gengaps )
+{
+    if( genfreq == NULL || genpssm == NULL || gengaps == NULL )
+        throw myruntime_error("ProGenerator: GenerateProfileSSEtest: Null target profile.");
+
+    const LogOddsMatrix* pssm = NULL;//profiles providing SS chain
+
+    if( GetNoProfiles() < 1 )
+        return;
+
+    const int   lenerr = 0;//5;
+    int         length = GetLengthToGenerate();
+    size_t  nopros = GetNoProfiles();
+    double  urv = rng_p_.GetDouble();
+    size_t  ind = ( size_t )rint( urv *(double)(nopros-1));
+    char    sse;
+
+    if( nopros <= ind )
+        throw myruntime_error("ProGenerator: GenerateProfileSSEtest: Invalid profile index generated.");
+
+    pssm = GetProPSSMAt(ind);
+
+    if( pssm == NULL )
+        throw myruntime_error("ProGenerator: GenerateProfileSSEtest: Null starting profile.");
+
+    size_t  len;
+    int     lenpssm = pssm->GetColumns();
+    double  urv2 = rng_pp_.GetDouble();
+    int     pp = ( int )rint( urv2 *(double)(lenpssm-1));
+    int     p, lc = 0, lp = 0, cnt = 0;
+
+    if( pp < 0 || lenpssm <= pp )
+        throw myruntime_error("ProGenerator: GenerateProfileSSEtest: Invalid profile position generated.");
+
+    while(( lc = genpssm->GetColumns()) < length - lenerr ) {
+        if( lc == lp )
+            cnt++;
+        else
+            cnt = 0;
+        if( 10 <= cnt )
+            throw myruntime_error("ProGenerator: GenerateProfileSSEtest: Live lock in generating a profile.");
+        lp = lc;
+        sse = pssm->GetSSStateAt(pp);
+        for( ; 0 <= pp && sse == pssm->GetSSStateAt(pp); pp-- );
+        pp++;
+        for( p = pp, len = 0; p < pssm->GetColumns() && sse == pssm->GetSSStateAt(p); p++, len++ );
+        while( 0 < len ) 
+            AddSSEtest( name, sse, genfreq, genpssm, gengaps, &len );
+        for( pp++; pp < pssm->GetColumns() && sse == pssm->GetSSStateAt(pp); pp++ );
+        if( pssm->GetColumns() <= pp ) {
+            ind++;
+            if( nopros <= ind )
+                ind = 0;
+            pssm = GetProPSSMAt(ind);
+            if( pssm == NULL )
+                throw myruntime_error("ProGenerator: GenerateProfileSSEtest: Null profile.");
             pp = 0;
         }
     }
@@ -542,7 +610,7 @@ void ProGenerator::AddSSE( const char* name, char sse,
 
     //start filling SS element
     for( ii = 0; pp < lenpssm && pssm->GetSSStateAt(pp) == sse &&
-       (( sse == SS_C )? genpssm->GetColumns() < length: 1 ); pp++, ii++ )
+       (( 1|| sse == SS_C )? genpssm->GetColumns() < length: 1 ); pp++, ii++ )
     {
         //sample just a fragment of a long coil
         if( sse == SS_C && lcnCLEN < clen && lcnCFRAG < ii )
@@ -551,6 +619,87 @@ void ProGenerator::AddSSE( const char* name, char sse,
         //rewrite the whole SS element
         AddColumn( name, pp, freq, pssm, gaps, genfreq, genpssm, gengaps );
     }
+}
+
+// -------------------------------------------------------------------------
+// AddSSEtest: add SS element to profile being generated; 
+//  NOTE: testing published algorithm
+//
+void ProGenerator::AddSSEtest( const char* name, char sse, 
+    FrequencyMatrix* genfreq, LogOddsMatrix* genpssm, GapScheme* gengaps, 
+    size_t* sslen )
+{
+    if( genfreq == NULL || genpssm == NULL || gengaps == NULL )
+        throw myruntime_error("ProGenerator: AddSSEtest: Null arguments.");
+    if( sse < 0 || SS_NSTATES <= sse )
+        throw myruntime_error("ProGenerator: AddSSEtest: Invalid SS state.");
+    if( sslen == NULL )
+        throw myruntime_error("ProGenerator: AddSSEtest: Null SSE length.");
+    if( MAXCOLUMNS <= *sslen )
+        throw myruntime_error("ProGenerator: AddSSEtest: Invalid SSE length.");
+
+    const FrequencyMatrix*  freq = NULL;
+    const LogOddsMatrix*    pssm = NULL;//profile providing SS element
+    const GapScheme*        gaps = NULL;
+
+    if( GetNoProfiles() < 1 )
+        throw myruntime_error("ProGenerator: AddSSE: No profiles.");
+
+    const int   length = GetLengthToGenerate();
+    size_t  nopros = GetNoProfiles();
+    double  urv = rng_sse_p_.GetDouble();
+    size_t  ind = ( size_t )rint( urv *(double)(nopros-1));
+
+    if( nopros <= ind )
+        throw myruntime_error("ProGenerator: AddSSE: Invalid profile index generated.");
+
+    freq = GetProFREQAt(ind);
+    pssm = GetProPSSMAt(ind);
+    gaps = GetProGAPSAt(ind);
+
+    if( freq == NULL || pssm == NULL || gaps == NULL )
+        throw myruntime_error("ProGenerator: AddSSE: Null profile.");
+
+    int     lenpssm = pssm->GetColumns();
+    int     left = SLC_MIN( 40, lenpssm * 2 / 10 );
+    int     rght = lenpssm - 1 - left;
+    double  urv2 = rng_sse_pp_.GetDouble();
+    int     pp = ( int )rint( urv2 *(double)(lenpssm-1));
+    char    sssp;
+
+    if( rght < pp )
+        pp = rght;
+    if( pp < left )
+        pp = left;
+
+    if( pp < 0 || lenpssm <= pp )
+        throw myruntime_error("ProGenerator: AddSSE: Invalid profile position generated.");
+
+    if( !pssm->GetSSSSet())
+        throw myruntime_error("ProGenerator: AddSSE: No SS prediction in a profile.");
+
+    for(; pp <= rght && (sssp=pssm->GetSSStateAt(pp)) != sse; pp++ );
+    if( rght < pp ) pp = left;
+    for(; pp <= rght && (sssp=pssm->GetSSStateAt(pp)) != sse; pp++ );
+    if( rght < pp )
+        return;//cycled
+
+    //get to the beginning of sse
+    for(; 0 <= pp && (sssp=pssm->GetSSStateAt(pp)) == sse; pp-- );
+    sssp = pssm->GetSSStateAt(++pp);
+    if( sssp != sse )
+        throw myruntime_error("ProGenerator: AddSSE: Unexpected SS state.");
+
+    //start filling SS element
+    for( ; pp < lenpssm && pssm->GetSSStateAt(pp) == sse && 0 < *sslen && 
+        genpssm->GetColumns() < length; pp++ )
+    {
+        //rewrite the whole SS element
+        AddColumn( name, pp, freq, pssm, gaps, genfreq, genpssm, gengaps );
+        (*sslen)--;
+    }
+    if( length <= genpssm->GetColumns())
+        *sslen = 0;
 }
 
 // -------------------------------------------------------------------------
@@ -726,3 +875,65 @@ void ProGenerator::RecalcBgProbs(
         throw myruntime_error( errbuf );
     }
 }
+
+// -------------------------------------------------------------------------
+// RecalcPostProbs: recalculate profile posterior probabilities
+// NOTE: consistent with 
+//  InputMultipleAlignment::CalcPosteriorProbabilities
+//
+void ProGenerator::RecalcPostProbs( 
+    FrequencyMatrix* genfreq, LogOddsMatrix* genpssm, GapScheme* gengaps )
+{
+    if( genfreq == NULL || genpssm == NULL || gengaps == NULL )
+        throw myruntime_error("ProGenerator: RecalcPostProbs: Null target profile.");
+
+    const size_t    noress = NUMALPH;
+    const size_t    noeffress = NUMAA;
+    const double    errtol = 1.0e-3;
+    char            errbuf[KBYTE];
+
+    double          ppp[noeffress];
+    double          denm, consv;
+    double*         tgprobs = NULL;
+    double          tgtp;
+    size_t          p, r;
+
+    for( r = 0; r < noeffress; r++ )
+        ppp[r] = 0.0;
+
+    consv = 0.0;
+    for( p = 0; p < genpssm->GetColumns(); p++ )
+    {
+        if( genpssm->GetTrgFreqsAt(p) == NULL )
+            throw myruntime_error( "ProGenerator: RecalcPostProbs: "
+                "Null profile target probabilities.");
+        tgprobs = (double*)*genpssm->GetTrgFreqsAt(p);
+        if( tgprobs == NULL )
+            throw myruntime_error("ProGenerator: RecalcPostProbs: Null target probabilities.");
+
+        for( r = 0; r < noeffress; r++ ) {
+            tgtp = tgprobs[r];
+            ppp[r] += tgtp;
+            consv += tgtp;
+        }
+    }
+
+    denm = 1.0;
+    if( consv )
+        denm /= consv;
+
+    consv = 0.0;
+    for( r = 0; r < noeffress; r++ ) {
+        ppp[r] *= denm;
+        consv += ppp[r];
+        genpssm->SetPostProbsAt( r, ppp[r]);
+    }
+    for( ; r < noress; r++ )
+        genpssm->SetPostProbsAt( r, 0.0 );
+    if( consv < 1.0 - errtol || consv > 1.0 + errtol ) {
+        sprintf( errbuf, "ProGenerator: RecalcPostProbs: Probabilities are not conserved: %g", consv );
+        throw myruntime_error( errbuf );
+    }
+    return;
+}
+

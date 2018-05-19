@@ -41,7 +41,8 @@ srcaln/ProfileAlignment.o: \
  ../../../src/liblib/compdef.h ../../../src/liblib/defines.h \
  ../../../src/liblib/pcmath.h ../../../src/liblib/mystring.h \
  ../../../src/liblib/myexcept.h ../../../src/liblib/mystring.h \
- ../../../src/ext/psl.h ../../../src/libpro/srcpro/SEGProfile.h \
+ ../../../src/ext/psl.h ../../../src/ext/gammainc.h \
+ ../../../src/ext/betainc.h ../../../src/libpro/srcpro/SEGProfile.h \
  /usr/include/stdio.h /usr/include/libio.h /usr/include/_G_config.h \
  /usr/include/wchar.h \
  /home/mindaugas/lib/gcc/x86_64-pc-linux-gnu/7.1.0/include/stdarg.h \
@@ -70,6 +71,7 @@ srcaln/ProfileAlignment.o: \
  ../../../src/libseg/SEGAbstract.h \
  ../../../src/liblib/BinarySearchStructure.h \
  ../../../src/libseg/SegmentStructure.h \
+ ../../../src/libpro/srcaln/AlignmentProbe.h \
  ../../../src/libpro/srcaln/MAAlignment.h \
  ../../../src/libpro/srcaln/ProfileAlignment.h ../../../src/liblib/stat.h \
  ../../../src/libpro/srcsco/ScoringMatrix.h \
@@ -82,8 +84,7 @@ srcaln/ProfileAlignment.o: \
  ../../../src/libhsh/HashTable.h ../../../src/libhsh/RJHashing.h \
  ../../../src/libhsh/SBoxHashing.h ../../../src/libhsh/HashFunctions.h \
  ../../../src/libhsh/MD5Hashing.h ../../../src/libhsh/CRCHashing.h \
- ../../../src/libpro/srcpro/DBProfileProbs.h \
- ../../../src/libpro/srcaln/ProfileAlignment.h
+ ../../../src/libpro/srcpro/DBProfileProbs.h
 
 /home/mindaugas/include/c++/7.1.0/stdlib.h:
 
@@ -227,6 +228,10 @@ srcaln/ProfileAlignment.o: \
 
 ../../../src/ext/psl.h:
 
+../../../src/ext/gammainc.h:
+
+../../../src/ext/betainc.h:
+
 ../../../src/libpro/srcpro/SEGProfile.h:
 
 /usr/include/stdio.h:
@@ -321,6 +326,8 @@ srcaln/ProfileAlignment.o: \
 
 ../../../src/libseg/SegmentStructure.h:
 
+../../../src/libpro/srcaln/AlignmentProbe.h:
+
 ../../../src/libpro/srcaln/MAAlignment.h:
 
 ../../../src/libpro/srcaln/ProfileAlignment.h:
@@ -354,5 +361,3 @@ srcaln/ProfileAlignment.o: \
 ../../../src/libhsh/CRCHashing.h:
 
 ../../../src/libpro/srcpro/DBProfileProbs.h:
-
-../../../src/libpro/srcaln/ProfileAlignment.h:

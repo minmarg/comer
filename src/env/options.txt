@@ -71,6 +71,18 @@ SSSWGT = 0.12 #0.1 #0.15
 SSSHDP = 0.01
 
 
+## Statistical significance estimation
+##
+#   Index of a model for the estimation of statistical  (0|1|2)
+#   significance
+#     (0 -- significance depends on profile lengths)
+#     (1 -- significance depends on profile attributes 
+#       and compositional similarity)
+#     (2 -- same as model 1 but regards the amount of 
+#       data used in simulations)
+SSEMODEL = 2
+
+
 ## SEG options:
 ##
 #   Invoke high-complexity filter in alignment          (0|1)

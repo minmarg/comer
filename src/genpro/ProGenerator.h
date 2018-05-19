@@ -66,12 +66,17 @@ protected:
                 FrequencyMatrix*, LogOddsMatrix*, GapScheme* );
     void    GenerateProfileSSE( const char* name, 
                 FrequencyMatrix*, LogOddsMatrix*, GapScheme* );
+    void    GenerateProfileSSEtest( const char* name, 
+                FrequencyMatrix*, LogOddsMatrix*, GapScheme* );
     void    AddFrag( const char* name, FrequencyMatrix*, LogOddsMatrix*, GapScheme* );
     void    AddSSE( const char* name, char sse, FrequencyMatrix*, LogOddsMatrix*, GapScheme* );
+    void    AddSSEtest( const char* name, char sse, FrequencyMatrix*, LogOddsMatrix*, GapScheme*,
+                        size_t* sslen );
     void    AddColumn( const char* name, int pp, 
                 const FrequencyMatrix*, const LogOddsMatrix*, const GapScheme*, 
                 FrequencyMatrix*, LogOddsMatrix*, GapScheme* );
     void    RecalcBgProbs( FrequencyMatrix*, LogOddsMatrix*, GapScheme* );
+    void    RecalcPostProbs( FrequencyMatrix*, LogOddsMatrix*, GapScheme* );
 
     const char* GetOutputDir() const { return outdir_; }
     const char* GetNamePattern() const { return nampat_; }

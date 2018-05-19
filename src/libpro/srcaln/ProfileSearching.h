@@ -126,6 +126,9 @@ public:
     void            SetHDPctbase( const HDPbase* value ) { HDPctbase_ = value; }
     const HDPbase*  GetHDPctbase() const { return HDPctbase_; }
 
+    void            SetSSEModel( int modndx ) { ssemodel_ = modndx; }
+    int             GetSSEModel() const { return ssemodel_; }
+
     bool            GetHCSeg() const            { return hcseg; }
     size_t          GetHCWinLength() const      { return hcwinlen; }
     double          GetHCLowEntropy() const     { return hclowentropy; }
@@ -389,6 +392,8 @@ private:
     int                     scoadj_;        ////score adjustment
     const HDPbase*          HDPbase_;       //HDP base structure with data
     const HDPbase*          HDPctbase_;     //HDP ctx base structure
+
+    int                     ssemodel_;      //index of a model for the estimation of stat. sign.
 
     bool                    autogapcosts;   //automatically computed gap opening costs
     int                     autocorrwinsize;//autocorrelation window size

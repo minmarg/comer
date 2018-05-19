@@ -131,6 +131,8 @@ ProfileSearching::ProfileSearching(
     HDPbase_( NULL ),
     HDPctbase_( NULL ),
 
+    ssemodel_( 0 ),
+
     autogapcosts( false ),
     autocorrwinsize( -1 ),
 
@@ -197,6 +199,8 @@ ProfileSearching::ProfileSearching()
     scoadj_( scoadjNo ),
     HDPbase_( NULL ),
     HDPctbase_( NULL ),
+
+    ssemodel_( 0 ),
 
     autogapcosts( false ),
     autocorrwinsize( -1 ),
@@ -446,6 +450,7 @@ void ProfileSearching::ComputationLogicWithProfiles(
         throw myruntime_error("ProfileSearching: Not enough memory.");
 
     try{
+        proaln->SetModelSS18( GetSSEModel());
         proaln->SetProProbs( profile_db.GetProProbs());
         //run alignment algorithm...
         proaln->Run( profile_db.GetNoSequences());

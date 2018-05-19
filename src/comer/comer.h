@@ -21,7 +21,7 @@
 // 1.03 . Improved scoring; improved SS processing
 
 
-static const char*  version = "1.04";
+static const char*  version = "1.05";
 static const char*  verdate = "";
 
 

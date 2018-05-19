@@ -240,6 +240,8 @@ int main( int argc, char *argv[] )
     double          valSSSWGT = OPTIONS.GetSSSWGT();
     double          valSSSHDP = OPTIONS.GetSSSHDP();
 
+    int             valSSEMODEL = OPTIONS.GetSSEMODEL();
+
     double          valINFCON = OPTIONS.GetINFCON();
     int             valMASKAFTER = OPTIONS.GetMASKAFTER();
     double          valSCALEDOWN = OPTIONS.GetSCALEDOWN();
@@ -431,7 +433,8 @@ int main( int argc, char *argv[] )
 
     message( NULL );
 
-    sprintf( strbuf, "EVAL = %.1f, NOHITS = %d, NOALNS = %d", valEVAL, valNOHITS, valNOALNS );
+    sprintf( strbuf, "EVAL = %.1f, NOHITS = %d, NOALNS = %d, SSEMODEL = %d", 
+              valEVAL, valNOHITS, valNOALNS, valSSEMODEL );
     message( strbuf, false );
 
     sprintf( strbuf, "IDENTITY = %.2f", valIDENTITY );
@@ -545,6 +548,8 @@ int main( int argc, char *argv[] )
         searching->SetHDPbase( &HDPBASE );
         if( GetHDPctsUsed())
             searching->SetHDPctbase( &HDPctBASE );
+
+        searching->SetSSEModel( valSSEMODEL );
 
         searching->SetAutoGapCosts( boolAutoOpenCost, intOPENCOST );
         searching->SetComputeDELETEstates( valDELSTATE );

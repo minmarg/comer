@@ -7,3 +7,6 @@ Changes of types of several variables to compile with the most recent versions
 of gcc
 1.04.02, January 2018    *  HDP-based and context scores recalculated based on
 sampled folds
+1.05.01, May 2018        *  Accurate estimation of statistical significance
+leading to a much higher rate of high-quality alignments and an increased
+sensitivity

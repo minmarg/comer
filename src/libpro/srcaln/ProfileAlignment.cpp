@@ -15,9 +15,12 @@
 #include "myexcept.h"
 
 #include "ext/psl.h"
+#include "ext/gammainc.h"
+#include "ext/betainc.h"
 #include "libpro/srcpro/SEGProfile.h"
+#include "libpro/srcaln/AlignmentProbe.h"
 #include "libpro/srcaln/MAAlignment.h"
-#include "ProfileAlignment.h"
+#include "libpro/srcaln/ProfileAlignment.h"
 
 //global file variables
 int     gnMAXMARGIN = 60;   //maximum margin length at both ends of profile
@@ -29,6 +32,15 @@ double  ProfileAlignment::s_segdistance_thrsh = 0.0;    //SEG distance threshold
 FrequencyMatrix dummyfreq;
 LogOddsMatrix   dummylogo;
 GapScheme       dummygaps;
+
+//values of pseudo hyperparameters for model SS18
+double  gSS18hypers_1[ProfileAlignment::noSS18hypers] = {0.1, 12.,  1., 4.,  0.05, 1.,   0.1,  0.35,  0.65};
+double  gSS18hypers_2[ProfileAlignment::noSS18hypers] = {0.6, 16.,  1.,12.,  0.3, -1.7,  0.1,  0.45,  0.65};
+
+//comments:
+//scaleE=.1*muE+.84;//linnear fit
+//scaleR=.17*muR+.09;//linnear fit
+//scaleR=.05*muR;//works similarly as .1*(exp(1.*scaleR)-1.) for mss18_1
 
 ////////////////////////////////////////////////////////////////////////////
 // CLASS ProfileAlignment
@@ -43,6 +55,8 @@ ProfileAlignment::ProfileAlignment(
         bool ungapped
     )
 :
+    modelSS18_( 0 ),
+    hypersSS18_( NULL ),
     model( StatModel::PC_DIST_HOM_0_2 ),
 
     F( NULL ),
@@ -83,6 +97,8 @@ ProfileAlignment::ProfileAlignment(
         !logo_sec_.IsCompatible( freq_sec_ ) || !logo_sec_.IsCompatible( gaps_sec_ ) )
             throw myruntime_error( "Profile matrices are incompatible." );
 
+    SetModelSS18( mss18_1 );
+
     querySize_ = freq_fst_.GetColumns();
     subjectSize_ = freq_sec_.GetColumns();
 
@@ -93,7 +109,10 @@ ProfileAlignment::ProfileAlignment(
 // default constructor is invalid for initialization
 //
 ProfileAlignment::ProfileAlignment()
-:   model( StatModel::PC_DIST_HOM_0_2 ),
+:   modelSS18_( 0 ),
+    hypersSS18_( NULL ),
+
+    model( StatModel::PC_DIST_HOM_0_2 ),
 
     F( 0 ),
     pointer( 0 ),
@@ -136,6 +155,20 @@ ProfileAlignment::ProfileAlignment()
 ProfileAlignment::~ProfileAlignment()
 {
     Destroy();
+}
+
+// -------------------------------------------------------------------------
+// SetModelSS18: set model for statistical significance estimation, SS18
+//
+void ProfileAlignment::SetModelSS18( int mod )
+{
+    if( noSS18models < mod )
+        throw myruntime_error( "ProfileAlignment: SetModelSS18: Invalid SS18 model." );
+    modelSS18_ = mod;
+    switch( modelSS18_ ) {
+        case mss18_1: hypersSS18_ = gSS18hypers_1; break;
+        case mss18_2: hypersSS18_ = gSS18hypers_2; break;
+    }
 }
 
 // -------------------------------------------------------------------------
@@ -252,11 +285,1177 @@ void ProfileAlignment::Clear()
     SetNoMatched( 0 );
 }
 
+// *************************************************************************
+// PARAMETERS FOR the ESTIMATION of STATISTICAL SIGNIFICANCE 
 // -------------------------------------------------------------------------
-// ComputeStatistics: compute e-value and p-value
-// -------------------------------------------------------------------------
+// *** ********************************** ***
+// COMBINED PREDICTION of PARAMETERS      ***
+// *** ********************************** ***
+// *** MODEL: genpro-fit2-rnd3-fr13-r0.05 ***
+// *** ********************************** ***
+// *** ONE LAYER: TRAINING UP TO n09      ***
+const double WEIGHTS_MUSCALE[] = {//rows -- inputs (0th -- biases), columns -- units
+ -0.2521174,  -0.09077898,  0.4872214, -0.2937255,
+ -0.2945740,   0.10689298, -0.4693488,  1.1206345,
+ -1.6767546, -51.75890070, -1.1090034, -0.7146433,
+ -3.1166613,   6.21859310, -9.2319566, -0.8462229,
+ 47.3575084,   2.59408759, -1.0808783, -0.7300542,
 
-void ProfileAlignment::ComputeStatistics()
+  0.9882636, -0.9937430,
+ -0.1616453,  0.6158327,
+  0.1249525, -0.4921280,
+  0.2313532, -3.1451028,
+ -3.8387104,  1.3241476
+};
+
+// SEPARATE PREDICTION for each PARAMETER ***
+enum TGEVDpar {
+    nWGT_MU,
+    nWGT_SCALE,
+    nWGT
+};
+
+// *** *************************************************** ***
+// *** RE MODEL: genpro-fit2-rnd3-fr9-r0.03-RE-altseed     ***
+// *** *************************************************** ***
+// *** ONE LAYER                                           ***
+// *** *************************************************** ***
+const double WEIGHTS_MU[] = {//rows -- inputs (0th -- biases), columns -- units
+     3.1179029,     2.8802990,    -2.3533863,    -0.1763256,
+     0.2732032,    -0.0845794,    -0.1646748,     0.3270687,
+    -1.7865388,     0.7335855,     2.6470928,     0.5918245,
+    -2.7370650,    -0.4155596,     1.6489798,     0.4900585,
+    -2.4113938,    -3.5943765,    -0.7481717,     0.0253580,
+
+     2.0547640,
+     1.4051396,
+    -1.7874640,
+     2.0048461,
+     0.6947985,
+};
+const double WEIGHTS_SCALE[] = {//rows -- inputs (0th -- biases), columns -- units
+    -0.7879687,    -4.9900681,    -0.8238729,    -4.0875038,
+    -1.2976974,    -0.1579375,    -0.4557760,     0.3549362,
+    -1.5414541,     1.1291076,    -0.7614433,     1.2263836,
+    -2.2530756,     4.1729244,     2.1426744,     6.7480938,
+     3.6836031,     1.1692273,     2.8791774,     0.5062199,
+
+     1.6914424,
+    -1.1273527,
+     3.0416709,
+     1.6852105,
+    -1.5032083,
+};/**/
+// *** K reference distribution                        ***
+// *** ONE LAYER                                       ***
+const double WEIGHTS_K[] = {//rows -- inputs (0th -- biases), columns -- units
+    -1.7721228,     2.4816519,    -8.6518419,    -0.4259275,
+     9.0964014,    -6.8232719,     9.5204826,    -6.0912179,
+     0.1275992,    -0.0631605,     0.5367407,     0.0549147,
+     4.7687464,   -16.5030831,     0.5409633,     5.6129098,
+    -0.2514888,     0.3401646,     0.3956280,     0.5282228,
+
+     5.7578105,
+    -7.1751879,
+    -3.9589345,
+    -4.3828591,
+    -2.1614059,
+};
+// *** regularized                                     ***
+/*const double WEIGHTS_K[] = {//rows -- inputs (0th -- biases), columns -- units
+    -2.8845544,    -1.5211136,    -0.1359915,     0.0383737,
+     1.8756024,     2.0403454,     0.4074908,    -0.7979058,
+     0.1621456,     0.0739473,     0.0175347,    -0.0838067,
+     3.4892843,    -3.5095957,     0.1623601,    -0.2353806,
+     0.2068843,     0.1709714,    -0.0249227,     0.0665686,
+
+    -0.0146893,
+    -4.2199248,
+    -3.0887579,
+    -0.4580971,
+     0.8015521,
+};*/
+// *** LAMBDA distributed as gamma distribution        ***
+// *** ONE LAYER                                       ***
+// *** regularized                                     ***
+const double WEIGHTS_SHAPE[] = {//rows -- inputs (0th -- biases), columns -- units
+    -2.9018623,    -0.9684774,     1.2608146,     1.5975289,
+    -1.9899775,     0.2388696,    -2.3885081,    -1.4792473,
+     1.8689068,    -2.3583094,     0.2683977,    -2.4600280,
+    -2.2387877,     2.0502527,    -4.5687282,    -1.0528608,
+     1.6114651,     1.2506443,     1.3080572,     2.8845918,
+
+     1.4792966,
+     2.8305984,
+    -2.2532871,
+    -1.3726210,
+     1.8922552,
+};
+// *** regularized                                     ***
+const double WEIGHTS_RATE[] = {//rows -- inputs (0th -- biases), columns -- units
+    -0.4075754,     3.2312478,     1.2221065,    -0.2575275,
+     0.6070305,     3.0940547,    -1.5283114,     2.1143662,
+    -2.8166513,    -1.5014809,    -2.5348326,     1.0289814,
+     1.4609513,     3.6779055,    -0.3311446,     1.7141028,
+     1.1267811,    -2.3566856,     3.1777027,    -1.2797282,
+
+     1.2463668,
+    -1.7424291,
+    -2.6175948,
+     1.7659680,
+     1.7149519,
+};
+// *** Identities distributed as neg. binomial distr.  ***
+// *** ONE LAYER                                       ***
+// *** unregularized                                   ***
+const double WEIGHTS_IDNS_SHAPE[] = {//rows -- inputs (0th -- biases), columns -- units
+    -8.4636515,    16.9797299,    -9.1250755,     0.3564449,
+    -4.2519708,     1.6559860,    -0.2791682,     1.4218709,
+     7.7580154,   -43.6828921,    -5.3104691,     0.1543695,
+     2.0993262,     0.2204461,    -0.1575909,     0.5074642,
+     6.3921483,    10.1670416,    23.7761161,    -1.9629601,
+
+     1.5204094,
+    -0.2345974,
+     0.4274742,
+    -0.7237101,
+    -0.2228414,
+};
+// *** unregularized                                   ***
+const double WEIGHTS_IDNS_PROB[] = {//rows -- inputs (0th -- biases), columns -- units
+     4.8073506,    -8.6539151,    -2.8968828,     8.0184503,
+    -2.1758273,    -1.5768951,     1.2869805,    -4.4719919,
+     4.0526030,     5.7376477,     7.4444679,    -5.3911772,
+     1.6753047,     0.5279203,    -0.8111873,     2.4874509,
+    -7.9253355,     6.1001819,    -6.2181541,    -3.9124716,
+
+    -0.0137954,
+     0.7790411,
+     0.6318541,
+    -0.8145518,
+    -0.4963973,
+};
+// *** Positives distributed as neg. binomial distr.   ***
+// *** ONE LAYER                                       ***
+// *** unregularized                                   ***
+const double WEIGHTS_PSTS_SHAPE[] = {//rows -- inputs (0th -- biases), columns -- units
+    -2.2536918,     6.5498621,   -17.7679277,     8.9469180,
+     0.2918674,     0.4063074,    -0.6413057,    -0.1579744,
+     2.2383033,    -6.6635263,    39.9775323,     3.1968203,
+    -2.9466323,     6.3040974,    -0.0988215,     0.7525636,
+     1.7852864,    -4.2965767,    -6.6078174,   -21.7463742,
+
+     1.3728666,
+     0.3601257,
+     0.1532177,
+    -0.4205272,
+     0.8366193,
+};
+// *** unregularized                                   ***
+const double WEIGHTS_PSTS_PROB[] = {//rows -- inputs (0th -- biases), columns -- units
+    10.7701016,     5.2423821,    -6.0872594,     2.2645375,
+    -0.3471798,    -0.9742062,     2.1039062,    -4.3148497,
+    -8.6466264,   -16.8524608,    -6.1815851,    -2.1717738,
+     0.5593822,     0.1871712,    -1.1179758,     3.9230042,
+    -6.3451519,     6.1641695,    18.0493775,     1.5164023,
+
+     0.5530306,
+    -0.7280781,
+    -0.9750970,
+     0.9860431,
+     0.5354816,
+};
+// *** EVD of scores grouped by RED                    ***
+// *** Exclusively-RED-based                           ***
+// *** ONE LAYER                                       ***
+const double WEIGHTS_R_MU[] = {//rows -- inputs (0th -- biases), columns -- units
+    -3.9242536,     4.4161349,     1.7215862,     0.1724395,
+     0.5252747,    -1.0654045,    -5.4591037,     4.3266981,
+     4.6103076,     0.1210349,    -0.5459632,     1.5179339,
+    -1.2452664,    -3.0690073,     1.6370711,    -4.8518849,
+
+     2.1171617,
+     0.4062795,
+    -1.6235214,
+     0.6316156,
+     0.5419556
+};
+// *** regularized ***
+const double WEIGHTS_R_SCALE[] = {//rows -- inputs (0th -- biases), columns -- units
+    -0.0026744,    -1.8972487,    -0.2211457,    -1.3897139,
+    -0.0002680,     3.3353436,    -1.5897148,     0.5816330,
+     0.0004945,    -0.5830618,    -0.4223673,    -0.5388343,
+     0.0044131,    -1.1410319,     5.1129024,     2.3233640,
+
+     0.1723871,
+    -0.0018545,
+     1.7041458,
+     2.3123308,
+    -1.0130396
+};
+
+// *** EVD of scores grouped by Lmb                    ***
+// *** Exclusively-Lmb-based                           ***
+// *** ONE LAYER                                       ***
+const double WEIGHTS_L_MU[] = {//rows -- inputs (0th -- biases), columns -- units
+    -0.0605839,    -0.0173019,     0.0600411,    -5.9555713,
+     0.0533123,    -0.0051053,    -0.0527767,    -3.1437676,
+    -1.0046299,     0.6215832,     1.0036328,     1.8754493,
+     0.9682557,    -0.5038284,    -0.9667071,     3.4776044,
+
+     2.8086869,
+    -0.5250554,
+     0.3085814,
+     0.5244239,
+     2.4166220,
+};
+// *** regularized ***
+const double WEIGHTS_L_SCALE[] = {//rows -- inputs (0th -- biases), columns -- units
+    -4.4935289,     1.4710020,    -1.4710009,     4.8137710,
+   -11.5416831,     0.7746900,    -0.7746948,     1.0000337,
+     0.4601384,     0.5248285,    -0.5248293,     2.0837171,
+     4.1707612,    -2.2621661,     2.2621667,    -5.3104535,
+
+     2.5137293,
+     4.2316344,
+    -0.8620832,
+     0.8620837,
+     3.1901578,
+};/**/
+
+// *** EVD of scores grouped by Idns                   ***
+// *** Exclusively-Idns-based                          ***
+// *** ONE LAYER                                       ***
+const double WEIGHTS_I_MU[] = {//rows -- inputs (0th -- biases), columns -- units
+     0.0505477,    -0.9116769,    -5.3143876,     1.8500664,
+    -0.9814986,     0.9831398,    -0.0997495,    -2.0215871,
+    -2.3893879,     0.4754569,     1.7375035,     1.5275100,
+     4.4739267,    -0.4448464,     2.4874111,    -1.8889199,
+
+     2.7438446,
+    -0.5897648,
+    -0.5601991,
+     2.1557387,
+    -0.3400550,
+};
+// *** not regularized ***
+const double WEIGHTS_I_SCALE[] = {//rows -- inputs (0th -- biases), columns -- units
+    -3.1160686,     5.3274713,    -0.9449234,     3.0163482,
+    -2.4690218,    -2.3375725,     1.3030284,    -0.0944874,
+     2.1655387,    -1.4349413,     3.4371325,    -1.8755715,
+     4.8969044,     3.8531494,    -7.4919642,    -2.3814889,
+
+     1.9843227,
+    -0.3898042,
+    -1.6549375,
+    -0.6424486,
+    -0.8907515,
+};
+
+// =========================================================================
+
+#define NN_UNIT_ACT_SIGM 0
+#define NN_UNIT_ACT_TANH 1
+
+// my_NN_evdpar: interface to general prediction function
+int my_NN_evdpar( int inputs, int layers, int hunits, double* input, int inmax,
+                  const double* cmbwgts, const double* par1wgts, const double* par2wgts,
+                  int activn,
+                  double* par1, double* par2 );
+
+
+// my_NN_Kref: Predicting K
+int my_NN_Kref( double E1, int L1, double E2, int L2, double* K )
+{
+    int tint;
+    double tdbl;
+    if( E1 < E2 ) {
+        //change places of sequences: NN trained asymmetrically
+        tdbl = E2; E2 = E1; E1 = tdbl; 
+        tint = L2; L2 = L1; L1 = tint;
+    }
+    else if( E1 == E2 && L1 < L2 ) {
+        tint = L2; L2 = L1; L1 = tint;
+    }
+    int       inputs = 4;
+    const int layers = 1;//2;
+    const int hunits = 4;//8;
+    const int inmax = 1+4;//SLC_MAX( inputs, hunits );
+    //double    input[inmax] = { 1.0, 0.05*E1, 0.001*((double)L1), 0.05*E2, 0.001*((double)L2) };
+    double    input[inmax] = { 1.0, 0.05*E1, log((double)L1)/SLC_LN1K, 0.05*E2, log((double)L2)/SLC_LN1K };
+    return my_NN_evdpar( inputs, layers, hunits, input, inmax, 
+                         NULL, WEIGHTS_K, NULL, NN_UNIT_ACT_SIGM, K, NULL );
+}
+
+// my_NN_evdpar_E: Predicting EVD's mu and scale based on profile attributes, 
+//  effnos and length 
+int my_NN_evdpar_E( double E1, int L1, double E2, int L2, double* mu, double* scale )
+{
+    int tint;
+    double tdbl;
+    if( E1 < E2 ) {
+        //change places of sequences: NN trained asymmetrically
+        tdbl = E2; E2 = E1; E1 = tdbl; 
+        tint = L2; L2 = L1; L1 = tint;
+    }
+    else if( E1 == E2 && L1 < L2 ) {
+        tint = L2; L2 = L1; L1 = tint;
+    }
+    int       inputs = 4;
+    const int layers = 1;//2;
+    const int hunits = 4;//8;
+    const int inmax = 1+4;//SLC_MAX( inputs, hunits );
+    //double    input[inmax] = { 1.0, 0.05*E1, 0.001*((double)L1), 0.05*E2, 0.001*((double)L2) };
+    double    input[inmax] = { 1.0, 0.05*E1, log((double)L1)/SLC_LN1K, 0.05*E2, log((double)L2)/SLC_LN1K };
+    return my_NN_evdpar( inputs, layers, hunits, input, inmax, 
+                         WEIGHTS_MUSCALE, WEIGHTS_MU, WEIGHTS_SCALE, NN_UNIT_ACT_TANH, mu, scale );
+}
+
+// my_NN_gammadpar_Lambda: Predicting the parameters of a Gamma distribution governing the 
+//  distribution of Lambda 
+int my_NN_gammadpar_Lambda( double E1, int L1, double E2, int L2, double* shape, double* rate )
+{
+    int tint;
+    double tdbl;
+    if( E1 < E2 ) {
+        //change places of sequences: NN trained asymmetrically
+        tdbl = E2; E2 = E1; E1 = tdbl; 
+        tint = L2; L2 = L1; L1 = tint;
+    }
+    else if( E1 == E2 && L1 < L2 ) {
+        tint = L2; L2 = L1; L1 = tint;
+    }
+    int       inputs = 4;
+    const int layers = 1;//2;
+    const int hunits = 4;//8;
+    const int inmax = 1+4;//SLC_MAX( inputs, hunits );
+    //double    input[inmax] = { 1.0, 0.05*E1, 0.001*((double)L1), 0.05*E2, 0.001*((double)L2) };
+    double    input[inmax] = { 1.0, 0.05*E1, log((double)L1)/SLC_LN1K, 0.05*E2, log((double)L2)/SLC_LN1K };
+    return my_NN_evdpar( inputs, layers, hunits, input, inmax, 
+                         NULL, WEIGHTS_SHAPE, WEIGHTS_RATE, NN_UNIT_ACT_TANH, shape, rate );
+}
+
+// my_NN_nbdpar_Idns: Predicting the parameters of a negative binomial distribution governing the 
+//  distribution of #Identities
+int my_NN_nbdpar_Idns( double E1, int L1, double E2, int L2, double* shape, double* prob )
+{
+    int tint;
+    double tdbl;
+    if( E1 < E2 ) {
+        //change places of sequences: NN trained asymmetrically
+        tdbl = E2; E2 = E1; E1 = tdbl; 
+        tint = L2; L2 = L1; L1 = tint;
+    }
+    else if( E1 == E2 && L1 < L2 ) {
+        tint = L2; L2 = L1; L1 = tint;
+    }
+    int       inputs = 4;
+    const int layers = 1;//2;
+    const int hunits = 4;//8;
+    const int inmax = 1+4;//SLC_MAX( inputs, hunits );
+    //double    input[inmax] = { 1.0, 0.05*E1, 0.001*((double)L1), 0.05*E2, 0.001*((double)L2) };
+    double    input[inmax] = { 1.0, 0.05*E1, log((double)L1)/SLC_LN1K, 0.05*E2, log((double)L2)/SLC_LN1K };
+    return my_NN_evdpar( inputs, layers, hunits, input, inmax, 
+                         NULL, WEIGHTS_IDNS_SHAPE, WEIGHTS_IDNS_PROB, NN_UNIT_ACT_TANH, shape, prob );
+}
+
+// my_NN_nbdpar_Psts: Predicting the parameters of a negative binomial distribution governing the 
+//  distribution of #Positives
+int my_NN_nbdpar_Psts( double E1, int L1, double E2, int L2, double* shape, double* prob )
+{
+    int tint;
+    double tdbl;
+    if( E1 < E2 ) {
+        //change places of sequences: NN trained asymmetrically
+        tdbl = E2; E2 = E1; E1 = tdbl; 
+        tint = L2; L2 = L1; L1 = tint;
+    }
+    else if( E1 == E2 && L1 < L2 ) {
+        tint = L2; L2 = L1; L1 = tint;
+    }
+    int       inputs = 4;
+    const int layers = 1;//2;
+    const int hunits = 4;//8;
+    const int inmax = 1+4;//SLC_MAX( inputs, hunits );
+    //double    input[inmax] = { 1.0, 0.05*E1, 0.001*((double)L1), 0.05*E2, 0.001*((double)L2) };
+    double    input[inmax] = { 1.0, 0.05*E1, log((double)L1)/SLC_LN1K, 0.05*E2, log((double)L2)/SLC_LN1K };
+    return my_NN_evdpar( inputs, layers, hunits, input, inmax, 
+                         NULL, WEIGHTS_PSTS_SHAPE, WEIGHTS_PSTS_PROB, NN_UNIT_ACT_TANH, shape, prob );
+}
+
+// my_NN_evdpar_R: Predicting the EVD's parameters for scores grouped according to RED 
+int my_NN_evdpar_R( double R, int L1, int L2, double* mu, double* scale )
+{
+    int tint;
+    if( 10. < R )
+        R = 10.;
+    if( L1 < L2 ) {
+        //NN trained asymmetrically
+        tint = L2; L2 = L1; L1 = tint;
+    }
+    int       inputs = 3;
+    const int layers = 1;//2;
+    const int hunits = 4;//8;
+    const int inmax = 1+4;//SLC_MAX( inputs, hunits );
+    double    input[inmax] = { 1.0, 0.1*R, log((double)L1)/SLC_LN1K, log((double)L2)/SLC_LN1K };
+    return my_NN_evdpar( inputs, layers, hunits, input, inmax, 
+                         NULL, WEIGHTS_R_MU, WEIGHTS_R_SCALE, NN_UNIT_ACT_TANH, mu, scale );
+}
+
+// my_NN_evdpar_L: Predicting the EVD's parameters for scores grouped according to the 
+//  value of Lambda
+int my_NN_evdpar_L( double Lmb, int L1, int L2, double* mu, double* scale )
+{
+    int tint;
+    Lmb = round(Lmb*10.)/10.;
+    if( Lmb <= 0. )
+        Lmb = 1.;
+    if( 10. < Lmb )
+        Lmb = 10.;
+    if( L1 < L2 ) {
+        //NN trained asymmetrically
+        tint = L2; L2 = L1; L1 = tint;
+    }
+    int       inputs = 3;
+    const int layers = 1;//2;
+    const int hunits = 4;//8;
+    const int inmax = 1+4;//SLC_MAX( inputs, hunits );
+    double    input[inmax] = { 1.0, 0.2*Lmb, log((double)L1)/SLC_LN1K, log((double)L2)/SLC_LN1K };
+    return my_NN_evdpar( inputs, layers, hunits, input, inmax, 
+                         NULL, WEIGHTS_L_MU, WEIGHTS_L_SCALE, NN_UNIT_ACT_TANH, mu, scale );
+}
+// my_NN_evdpar_I: Predicting the EVD's parameters for scores grouped according to 
+//  #Identities
+int my_NN_evdpar_I( double idns, int L1, int L2, double* mu, double* scale )
+{
+    int tint;
+    if( idns < 0. )
+        idns = 0.;
+    if( 50. < idns )
+        idns = 50.;
+    if( L1 < L2 ) {
+        //NN trained asymmetrically
+        tint = L2; L2 = L1; L1 = tint;
+    }
+    int       inputs = 3;
+    const int layers = 1;//2;
+    const int hunits = 4;//8;
+    const int inmax = 1+4;//SLC_MAX( inputs, hunits );
+    double    input[inmax] = { 1.0, 0.2*idns, log((double)L1)/SLC_LN1K, log((double)L2)/SLC_LN1K };
+    return my_NN_evdpar( inputs, layers, hunits, input, inmax, 
+                         NULL, WEIGHTS_I_MU, WEIGHTS_I_SCALE, NN_UNIT_ACT_TANH, mu, scale );
+}
+
+// my_NN_evdpar_RE: Predicting the EVD's parameters for scores grouped according to 
+//  both profile attributes and RED
+int my_NN_evdpar_RE( double R, double E1, int L1, double E2, int L2, double* mu, double* scale )
+{
+    int tint;
+    double tdbl;
+    if( E1 < E2 ) {
+        //change places of sequences: NN trained asymmetrically
+        tdbl = E2; E2 = E1; E1 = tdbl; 
+        tint = L2; L2 = L1; L1 = tint;
+    }
+    else if( E1 == E2 && L1 < L2 ) {
+        tint = L2; L2 = L1; L1 = tint;
+    }
+    int       inputs = 5;
+    const int layers = 2;//1;//2;
+    const int hunits = 8;//4;//8;
+    const int inmax = 1+8;//5;//8;//SLC_MAX( inputs, hunits );
+    double    input[inmax] = { 1.0, 0.1*R, 
+    0.05*E1, log((double)L1)/SLC_LN1K, 0.05*E2, log((double)L2)/SLC_LN1K };
+    return my_NN_evdpar( inputs, layers, hunits, input, inmax, 
+                         WEIGHTS_MUSCALE, WEIGHTS_MU, WEIGHTS_SCALE, NN_UNIT_ACT_SIGM, mu, scale );
+}
+
+// .........................................................................
+// my_NN_evdpar: implementation of the general prediction function
+int my_NN_evdpar( int inputs, int layers, int hunits, double* input, int inmax,
+                  const double* cmbwgts, const double* par1wgts, const double* par2wgts,
+                  int activn,
+                  double* par1, double* par2 )
+{
+    if( par1 == NULL && par2 == NULL ) {
+        error("my_NN_evdpar: Null artguments.");
+        throw myruntime_error("my_NN_evdpar: Null artguments.");
+    }
+    if( input == NULL || inmax != 1+SLC_MAX(inputs,hunits)) {
+        error("my_NN_evdpar: Invalid inputs.");
+        throw myruntime_error("my_NN_evdpar: Invalid inputs.");
+    }
+
+    const bool linout = false;//linear output
+    const bool comb = par1 && par2;//combined output of mu and scale
+    const double* weights = comb? cmbwgts: ( par1? par1wgts: par2wgts );
+    const int outputs = comb? 2: 1;//number of outputs
+    double midinp[hunits];
+    int inputs1 = inputs+1;
+    int lpsd, ulim;
+    int l, u, i, j;
+
+    if( comb && hunits < 2 ) {
+        error("my_NN_evdpar: Invalid NN architecture.");
+        throw myruntime_error("my_NN_evdpar: Invalid NN architecture.");
+    }
+    if( !weights ) {
+        error("my_NN_evdpar: Null weights.");
+        throw myruntime_error("my_NN_evdpar: Null weights.");
+    }
+
+    ulim = hunits;
+    for( l = 0, lpsd = 0; l < layers+1; l++ ) {
+        if( layers <= l ) ulim = outputs;
+        memset( midinp, 0, hunits*sizeof(double));
+        for( u = 0; u < ulim; u++ )
+            for( i = 0; i < inputs1; i++ )
+                midinp[u] += input[i] * weights[lpsd+u+ulim*i];
+        if( !linout || l < layers )
+            for( u = 0; u < ulim; u++ ) {
+                input[u+1] = 1./(1.+exp(-midinp[u]));
+                if( activn == NN_UNIT_ACT_SIGM );
+                else if( activn == NN_UNIT_ACT_TANH )
+                    input[u+1] += input[u+1] - 1.; //tanh(midinp[u]*.5); .5, steepness
+                else {
+                    error("my_NN_evdpar: Unknown activation function.");
+                    throw myruntime_error("my_NN_evdpar: Unknown activation function.");
+                }
+            }
+        lpsd += hunits * inputs1;
+        inputs = ulim;
+        inputs1 = inputs+1;
+    }
+    if( linout )
+        for( u = 0; u < ulim; u++ )
+            input[u+1] = midinp[u];
+
+    if( par1 )
+        *par1 = input[1];
+    if( par2 )
+        *par2 = input[outputs];
+    return 0;
+}
+
+// =========================================================================
+
+// -------------------------------------------------------------------------
+// ComputeStatisticsHelper: helper method to compute statistical parameters
+//
+void ProfileAlignment::ComputeStatisticsHelper( 
+    double qnos, int qlen, double snos, int slen,
+    double red, double lmbd, int idns,
+    double* mu, double* scale )
+{
+    double  muE = 0.0, muR = 0.0;
+    double  scaleE = 0.0, scaleR = 0.0;
+    double  alpha = 0.0, ibeta = 0.0;
+    char    strbuf[KBYTE];
+    const double fctmu = 30.;//output scale for mu
+    const double minmu = 3.;//minimum value for mu
+    const double fctscale = 5.;//output scale for EVD's scale
+    const double maxscale = 5.;//maximum value for scale
+    const double minscale = .1;//minimum value for scale
+
+    if( hypersSS18_ == NULL )
+        throw myruntime_error("ProfileAlignment: ComputeStatisticsHelper: Model params: Memory access error.");
+    if( mu == NULL || scale == NULL )
+        throw myruntime_error("ProfileAlignment: ComputeStatisticsHelper: Memory access error.");
+
+    my_NN_evdpar_E( qnos, qlen, snos, slen, &muE, NULL );
+    my_NN_evdpar_L( lmbd, qlen, slen, &muR, NULL );
+    muE *= fctmu; muR *= fctmu;//NN predictions are scaled
+    if( muE < minmu ) muE = minmu;
+    if( muR < minmu ) muR = minmu;
+
+    scaleE = hypersSS18_[ss18scaleE_S] * muE + hypersSS18_[ss18scaleE_I];
+    if( scaleE < minscale ) scaleE = minscale;
+    if( maxscale < scaleE ) scaleE = maxscale;
+
+    my_NN_evdpar_L( lmbd, qlen, slen, NULL, &scaleR );
+    scaleR *= fctscale;//NN predictions are scaled
+    if( scaleR < minscale ) scaleR = minscale;
+    scaleR = hypersSS18_[ss18scaleR_F] * ( exp(scaleR) - 1. );
+    if( scaleR < minscale ) scaleR = minscale;
+    if( maxscale < scaleR ) scaleR = maxscale;
+
+    muE = hypersSS18_[ss18muE_S] * muE + hypersSS18_[ss18muE_I]; 
+    muR = hypersSS18_[ss18muR_S] * muR + hypersSS18_[ss18muR_I];
+
+//     if( muE < 3.0 ) muE = 3.0;
+//     if( muR < 3.0 ) muR = 3.0;
+
+    alpha = hypersSS18_[ss18alpha];
+    //alpha += ( 1. - alpha ) * 0.1 * red;
+    alpha -= alpha * 0.1 * SLC_MIN(10.,1./lmbd);
+    //conditional mean estimate of mu
+    *mu = alpha * muE + ( 1. - alpha ) * muR;
+
+    ibeta = hypersSS18_[ss18ibeta];
+    //ibeta += ( 1. - ibeta ) * 0.1 * red;
+    ibeta += ( 1. - ibeta ) * 0.1 * SLC_MIN(10.,1./lmbd);
+    //conditional mean estimate of scale
+    *scale = ( 1. - ibeta ) * scaleE + ibeta * scaleR;
+
+    if( *mu <= 0.0 ) {
+        sprintf(strbuf, "ProfileAlignment: ComputeStatisticsHelper: Invalid location: %g.", *mu );
+        throw myruntime_error( strbuf );
+    }
+    if( *scale <= 0.0 ) {
+        sprintf(strbuf, "ProfileAlignment: ComputeStatisticsHelper: Invalid scale: %g.", *scale );
+        throw myruntime_error( strbuf );
+    }
+}
+
+// -------------------------------------------------------------------------
+// ComputeKrefStatisticsHelper: helper method to compute parameter Kref
+//
+void ProfileAlignment::ComputeKrefStatisticsHelper( 
+    double qnos, int qlen, double snos, int slen,
+    double red, double K,
+    double* Kref )
+{
+    char   strbuf[KBYTE];
+
+    if( Kref == NULL )
+        throw myruntime_error("ProfileAlignment: ComputeKrefStatisticsHelper: Memory access error.");
+
+    my_NN_Kref( qnos, qlen, snos, slen, Kref );
+
+    if( *Kref < 0.0  || 1.0 < *Kref ) {
+        sprintf(strbuf, "ProfileAlignment: ComputeKrefStatisticsHelper: Invalid Kref: %g.", *Kref );
+        throw myruntime_error( strbuf );
+    }
+}
+
+// -------------------------------------------------------------------------
+// ComputeLambdaStatisticsHelper: helper method to compute statistical 
+//  parameters of gamma distribution representing the distribution of lambda
+//
+void ProfileAlignment::ComputeLambdaStatisticsHelper( 
+    double qnos, int qlen, double snos, int slen, 
+    double red, double lmbd, 
+    double* shape, double* rate )
+{
+    double shapeE = 0.0;
+    double rateE = 0.0;
+    char   strbuf[KBYTE];
+
+    if( shape == NULL || rate == NULL )
+        throw myruntime_error("ProfileAlignment: ComputeLambdaStatisticsHelper: Memory access error.");
+
+    my_NN_gammadpar_Lambda( qnos, qlen, snos, slen, &shapeE, NULL );
+    if( 9. < shapeE ) {
+        sprintf(strbuf, "ProfileAlignment: ComputeLambdaStatisticsHelper: "
+                        "Invalid shape prediction: %g.", shapeE );
+        throw myruntime_error( strbuf );
+    }
+    shapeE = exp(9.*shapeE);
+    shapeE*= 0.05;
+    *shape = shapeE;
+
+    my_NN_gammadpar_Lambda( qnos, qlen, snos, slen, NULL, &rateE );
+    if( 9. < rateE ) {
+        sprintf(strbuf, "ProfileAlignment: ComputeLambdaStatisticsHelper: "
+                        "Invalid rate prediction: %g.", rateE );
+        throw myruntime_error( strbuf );
+    }
+    rateE = exp(9.*rateE);
+    rateE*= 0.05;
+    *rate = rateE;
+
+    if( *shape <= 0.0 ) {
+        sprintf(strbuf, "ProfileAlignment: ComputeLambdaStatisticsHelper: "
+                        "Invalid shape parameter: %g.", *shape );
+        throw myruntime_error( strbuf );
+    }
+    if( *rate <= 0.0 ) {
+        sprintf(strbuf, "ProfileAlignment: ComputeLambdaStatisticsHelper: "
+                        "Invalid rate parameter: %g.", *rate );
+        throw myruntime_error( strbuf );
+    }
+}
+
+// -------------------------------------------------------------------------
+// ComputeIdnsStatisticsHelper: helper method to compute statistical 
+//  parameters of neg. binomial distribution that represents the 
+//  distribution of #identities
+//
+void ProfileAlignment::ComputeIdnsStatisticsHelper( 
+    double qnos, int qlen, double snos, int slen, 
+    double red, double lmbd, 
+    double* shape, double* prob )
+{
+    double shapeE = 0.0;
+    double probE = 0.0;
+    char   strbuf[KBYTE];
+
+    if( shape == NULL || prob == NULL )
+        throw myruntime_error("ProfileAlignment: ComputeIdnsStatisticsHelper: Memory access error.");
+
+    my_NN_nbdpar_Idns( qnos, qlen, snos, slen, &shapeE, NULL );
+    if( 1. < shapeE || shapeE < 0. ) {
+        sprintf(strbuf, "ProfileAlignment: ComputeIdnsStatisticsHelper: "
+                        "Invalid shape prediction: %g.", shapeE );
+        throw myruntime_error( strbuf );
+    }
+    shapeE = 15.*shapeE;
+    //shapeE *= 10.;
+    *shape = shapeE;
+
+    my_NN_nbdpar_Idns( qnos, qlen, snos, slen, NULL, &probE );
+    if( probE < .01 )
+        probE = .01;
+    if( .9 < probE )
+        probE = .9;
+    if( 1. < probE || probE < 0. ) {
+        sprintf(strbuf, "ProfileAlignment: ComputeIdnsStatisticsHelper: "
+                        "Invalid prob prediction: %g.", probE );
+        throw myruntime_error( strbuf );
+    }
+    *prob = probE;
+
+    if( *shape <= 0.0 ) {
+        sprintf(strbuf, "ProfileAlignment: ComputeIdnsStatisticsHelper: "
+                        "Invalid shape parameter: %g.", *shape );
+        throw myruntime_error( strbuf );
+    }
+    if( 1. < *prob || *prob <= 0.0 ) {
+        sprintf(strbuf, "ProfileAlignment: ComputeIdnsStatisticsHelper: "
+                        "Invalid prob parameter: %g.", *prob );
+        throw myruntime_error( strbuf );
+    }
+}
+
+// -------------------------------------------------------------------------
+// ComputeIdnsStatisticsHelper: helper method to compute statistical 
+//  parameters of neg. binomial distribution that represents the 
+//  distribution of #positives
+//
+void ProfileAlignment::ComputePstsStatisticsHelper( 
+    double qnos, int qlen, double snos, int slen, 
+    double red, double lmbd, 
+    double* shape, double* prob )
+{
+    double shapeE = 0.0;
+    double probE = 0.0;
+    char   strbuf[KBYTE];
+
+    if( shape == NULL || prob == NULL )
+        throw myruntime_error("ProfileAlignment: ComputePstsStatisticsHelper: Memory access error.");
+
+    my_NN_nbdpar_Psts( qnos, qlen, snos, slen, &shapeE, NULL );
+    if( 1. < shapeE || shapeE < 0. ) {
+        sprintf(strbuf, "ProfileAlignment: ComputePstsStatisticsHelper: "
+                        "Invalid shape prediction: %g.", shapeE );
+        throw myruntime_error( strbuf );
+    }
+    shapeE = 15.*shapeE;
+    //shapeE *= 10.;
+    *shape = shapeE;
+
+    my_NN_nbdpar_Psts( qnos, qlen, snos, slen, NULL, &probE );
+    if( probE < .01 )
+        probE = .01;
+    if( .999 < probE )
+        probE = .999;
+    if( 1. < probE || probE < 0. ) {
+        sprintf(strbuf, "ProfileAlignment: ComputePstsStatisticsHelper: "
+                        "Invalid prob prediction: %g.", probE );
+        throw myruntime_error( strbuf );
+    }
+    *prob = probE;
+
+    if( *shape <= 0.0 ) {
+        sprintf(strbuf, "ProfileAlignment: ComputePstsStatisticsHelper: "
+                        "Invalid shape parameter: %g.", *shape );
+        throw myruntime_error( strbuf );
+    }
+    if( 1. < *prob || *prob <= 0.0 ) {
+        sprintf(strbuf, "ProfileAlignment: ComputePstsStatisticsHelper: "
+                        "Invalid prob parameter: %g.", *prob );
+        throw myruntime_error( strbuf );
+    }
+}
+
+// -------------------------------------------------------------------------
+// ComputeStatisticsHelper2: helper method to compute e-value
+//
+void ProfileAlignment::ComputeExpectHelper2( 
+    double qnos, int qlen, double snos, int slen, 
+    double red, 
+    double score, double* expect )
+{
+    mystring preamb = "ProfileAlignment: ComputeExpectHelper2: ";
+    const AbstractScoreMatrix* scmatrix = GetScoreMatrix();
+    if( scmatrix == NULL )
+        throw myruntime_error( preamb + "Null score matrix.");
+
+    const bool   bDEPENDENTKREF = false;//calculate Kref in the profile context
+    //
+    static const double mn_act = (double)scmatrix->GetSearchSpace();
+    static const double inopairs = 0.0001;//inverse to the number of pairs used in experiments
+
+    //norm: psts/pow(l1*l2,1.5)
+    const double psts_factor = 100000.;//factor of psts in the numerator
+    const double psts_exp = 1.5;//exponent in the denominator when normalizing psts 
+    const double psts_nbd_shape_exp = 0.1;
+    const double psts_nbd_prob_exp = 0.757213;
+    //Fisher's generalized method
+    const double dfo2 = 1.346206;//Fisher's test: degrees of freedom * 0.5
+    const double c = 1.485656;//Fisher's test: scale factor for the test
+
+    int    idns = GetNoIdentities();
+    int    psts = GetNoPositives();
+    double lmbd = scmatrix->GetLambda();//calculated ungapped
+    double lmbdref = scmatrix->GetRefLambda();//ungapped reference
+    double K = scmatrix->GetK();//calculated ungapped
+    double Kref = scmatrix->GetRefK();//ungapped reference
+
+    double mu_exp = 0.0;//empirical mu
+    double scale_exp = 0.0;//empirical scale
+    double scale_der;//scale derived
+    double logK_der, logK_exp;//K derived and empirical
+    double logKmn_der, logexpect;//K derived * mn and log expect
+    double gamma_shape_exp = 0.0;//empirical shape of lambda's gammad
+    double gamma_rate_exp = 0.0;//empirical rate of lambda's gammad
+    double nbd_shape_exp = 0.0;//empirical shape of idnts/psts' nbd
+    double nbd_prob_exp = 0.0;//empirical prob of idnts/psts' nbd
+    double fct = 0.;
+    double err;
+    int    code;
+    char   strbuf[KBYTE];
+
+    if( expect == NULL )
+        throw myruntime_error( preamb + "Null arguments.");
+
+    ComputeStatisticsHelper( qnos, qlen, snos, slen, red, lmbd, idns, &mu_exp, &scale_exp );
+
+    if( mu_exp <= 0.0 || scale_exp <= 0.0 ) {
+        sprintf(strbuf, "%sInvalid evd parameters: %g %g.", preamb.c_str(), mu_exp, scale_exp );
+        throw myruntime_error( strbuf );
+    }
+
+    if( bDEPENDENTKREF ) {
+        //Kref in the profile context: slightly better but in the limit of error
+        ComputeKrefStatisticsHelper( qnos, qlen, snos, slen, red, K, &Kref );
+        if( Kref <= 0.0 || 1.0 <= Kref ) {
+            sprintf(strbuf, "%sIgnoring reference-K parameter: %g.", preamb.c_str(), Kref );
+            warning( strbuf );
+        }
+    }
+
+    scale_der = scale_exp;
+    if( 0&& 0. < lmbd && 0. < lmbdref ) {
+        //unused...
+        fct = lmbdref/lmbd;
+        fct = SLC_MAX(1.,SLC_MIN(1.1,fct));
+        scale_der = fct*scale_exp;
+        //scale_der = lmbdref*scale_exp/lmbd;//s_d=s*s_e/s_u; s/s_u=l_u/l
+    }
+
+    logKmn_der = mu_exp / scale_exp;
+    if( K > Kref && 0. < K && K < 1.0 && 0. < Kref && Kref < 1.0 )
+        logKmn_der += log(K/Kref);//K_d=K*K_e/K_u
+
+    logexpect = logKmn_der - score / scale_der;
+
+    if( SLC_LOG_DBL_MAX < logexpect )
+        *expect = SLC_DBL_MAX;
+    else if( logexpect < SLC_LOG_DBL_MIN )
+        *expect = 0.;
+    else
+        *expect = exp(logexpect);
+
+    if( *expect <= 0.0 )
+        *expect = SLC_DBL_MIN;
+
+    //{{combining dependent significance
+    int mod = GetModelSS18();//model SS18
+    double pairexp = *expect;//expect calculated based on profile attributes and compositional similarity
+    double pairpaval;//alignment p-value
+    double pairpcval,pairpcvali;//dependent p-value //NOTE:
+    double pairproduct;//p-value product
+    double pairpuval;//unified p-value
+    double pairexpunif;//unified pair expect
+    double expunif;//unified expect
+
+    if( mod == mss18_2 ) {
+        //this follows from the assumption in prediction that 
+        //pairexp=expect*qlen*slen/(qlen*slen*#pairs_in_experiments)=expect/#pairs_in_experiments;
+        //note, however, an inverse dependence of mu on the prediction in this case
+        pairexp *= inopairs;
+    }
+
+    if( pairexp < 0.01 )
+        pairpaval = pairexp;
+    else
+        pairpaval = 1. - exp(-pairexp);
+
+    pairpcval = 1.;
+
+//     //{{LAMBDA
+//     ComputeLambdaStatisticsHelper( qnos, qlen, snos, slen, red, lmbd, &gamma_shape_exp, &gamma_rate_exp );
+//     if( gamma_shape_exp <= 0.0 || gamma_rate_exp <= 0.0 ) {
+//         sprintf(strbuf, "%sInvalid gammad parameters: %g %g.", 
+//                 preamb.c_str(), gamma_shape_exp, gamma_rate_exp );
+//         throw myruntime_error( strbuf );
+//     }
+//     if( lmbd <= 0. )
+//         lmbd = 0.1;
+//     if(( code = psl_gammainc_P_e( gamma_shape_exp, gamma_rate_exp*(lmbd), &pairpcval, &err )) != PSL_OK ) {
+//         throw myruntime_error( preamb + "lower inc. gamma failed: " + TranslatePSLError( code ));
+//     }
+//     //}}
+
+    //{{PSTS normalized, general case
+    psts = (int)rint( (double)psts*psts_factor / pow((double)(qlen*slen),psts_exp) );
+    if(( code = psl_betainc_e( psts+1, psts_nbd_shape_exp, psts_nbd_prob_exp, &pairpcval, &err )) != PSL_OK ) {
+          throw myruntime_error( preamb + "regularized inc. beta failed: " + TranslatePSLError( code ));
+    }
+    //}}
+    //{{Fisher's generalized method for arbitrary k
+    //s,psts
+    if(( code = psl_gammainc_Q_e( dfo2, (-log(pairpaval)-log(pairpcval))/c, &pairpuval, &err )) != PSL_OK ) {
+        throw myruntime_error( preamb + "upper inc. gamma failed: " + TranslatePSLError( code ));
+    }
+    //}}
+
+    if( pairpuval < 0.01 )
+        pairexpunif = pairpuval;
+    else
+        pairexpunif = -log(1.-pairpuval);
+
+    expunif = pairexpunif * mn_act / ( qlen*slen );
+    if( expunif <= 0.0 )
+        expunif = SLC_DBL_MIN;
+    *expect = expunif;
+}
+
+// -------------------------------------------------------------------------
+// ComputeStatisticsHelper: helper method to compute e-value
+//
+void ProfileAlignment::ComputeExpectHelper( 
+    double qnos, int qlen, double snos, int slen, 
+    double red, double lmbd, int idns, 
+    double score, double* expect )
+{
+    double mu = 0.0;
+    double scale = 0.0;
+    double explambda, expKmn;//lambda and Kmn
+    char   strbuf[KBYTE];
+
+    if( expect == NULL )
+        throw myruntime_error("ProfileAlignment: ComputeExpectHelper: Null arguments.");
+
+    ComputeStatisticsHelper( qnos, qlen, snos, slen, red, lmbd, idns, &mu, &scale );
+
+    if( mu <= 0.0 || scale <= 0.0 ) {
+        sprintf(strbuf, "ProfileAlignment: ComputeExpectHelper: "
+                        "Invalid evd parameters: %g %g.", mu, scale );
+        throw myruntime_error( strbuf );
+    }
+
+    *expect = exp((mu-score)/scale);
+}
+
+// -------------------------------------------------------------------------
+// ComputeMixtureExpect: calculate e-value of the mixture
+//
+void ProfileAlignment::ComputeMixtureExpect( 
+    double qnos, int qlen, double snos, int slen, 
+    double red, double lmbd, 
+    double score, double* expect )
+{
+    const DBProfileProbs* proprobs = GetProProbs();
+    const bool probsready = proprobs && proprobs->ProbsReady();
+    int    idns = GetNoIdentities();
+    double prob, sumprob;
+    double exprt;//partial expect
+    int e1, e2, l1, l2;//level indices
+    int n;
+
+    if( expect == NULL )
+        throw myruntime_error("ProfileAlignment: ComputeMixtureExpect: Null arguments.");
+
+    *expect = sumprob = 0.;
+    n = 0;
+
+    if( !probsready ) {
+        ComputeExpectHelper( qnos, qlen, snos, slen, red, lmbd, idns, score, expect );
+    }
+    else {
+        proprobs->GetLevIndices( qnos, qlen, &e1, &l1 );
+        //qnos = proprobs->GetEffLvs().GetValueAt(e1);
+        //qlen = proprobs->GetLenLvs().GetValueAt(l1);
+        for( e2 = 0; e2 <= e1; e2++ ) 
+        {
+            snos = proprobs->GetEffLvs().GetValueAt(e2);
+            for( l2 = 0; l2 < proprobs->GetLenLvs().GetSize(); l2++ ) 
+            {
+                if( e1 <= e2 && l1 < l2 )
+                  break;
+                slen = proprobs->GetLenLvs().GetValueAt(l2);
+
+                prob = proprobs->GetProbAt( e1, l1, e2, l2 ); n++;
+                if( prob <= 0. )
+                    continue;
+                ComputeExpectHelper( qnos, qlen, snos, slen, red, lmbd, idns, score, &exprt );
+                *expect += prob * exprt;
+                sumprob += prob;
+            }
+        }
+        snos = qnos;
+        slen = qlen;
+        l1++;
+        if( proprobs->GetLenLvs().GetSize() <= l1 ) {
+            e1++; l1 = 0;
+        }
+        for( --e2, --l2; e1 < proprobs->GetEffLvs().GetSize(); e1++, l1 = 0 ) 
+        {
+            qnos = proprobs->GetEffLvs().GetValueAt(e1);
+            for( ; l1 < proprobs->GetLenLvs().GetSize(); l1++ ) 
+            {
+                qlen = proprobs->GetLenLvs().GetValueAt(l1);
+
+                prob = proprobs->GetProbAt( e1, l1, e2, l2 ); n++;
+                if( prob <= 0. )
+                    continue;
+                ComputeExpectHelper( qnos, qlen, snos, slen, red, lmbd, idns, score, &exprt );
+                *expect += prob * exprt;
+                sumprob += prob;
+            }
+        }
+
+//       for( e1 = 0; e1 < proprobs->GetEffLvs().GetSize(); e1++ ) 
+//       {
+//         qnos = proprobs->GetEffLvs().GetValueAt(e1);
+//         for( l1 = 0; l1 < proprobs->GetLenLvs().GetSize(); l1++ ) 
+//         {
+//           qlen = proprobs->GetLenLvs().GetValueAt(l1);
+//           for( e2 = 0; e2 <= e1; e2++ ) 
+//           {
+//             snos = proprobs->GetEffLvs().GetValueAt(e2);
+//             for( l2 = 0; l2 < proprobs->GetLenLvs().GetSize(); l2++ ) 
+//             {
+//               if( e1 <= e2 && l1 < l2 )
+//                 break;
+//               slen = proprobs->GetLenLvs().GetValueAt(l2);
+// 
+//               prob = proprobs->GetProbAt(n++);
+//               if( prob <= 0. )
+//                   continue;
+//               ComputeExpectHelper( qnos, qlen, snos, slen, red, lmbd, idns, score, &exprt );
+//               *expect += prob * exprt;
+//             }
+//           }
+//         }
+//       }
+
+    }
+
+    if( probsready && n != proprobs->GetCardinality())
+        throw myruntime_error("ProfileAlignment: ComputeStatisticsHelper: Some probabilities unprocessed.");
+
+    if( 0. < *expect && sumprob )
+        *expect /= sumprob;
+}
+
+// -------------------------------------------------------------------------
+// ComputeStatisticsSS18: calculate e-value and related measures using 
+//  model SS18
+//
+void ProfileAlignment::ComputeStatisticsSS18()
+{
+    const AbstractScoreMatrix* scmatrix = GetScoreMatrix();
+    if( scmatrix == NULL )
+        throw myruntime_error("ProfileAlignment: ComputeStatisticsHelper: Null score matrix.");
+
+    const int effnoress = NUMAA;
+    double lmbd = scmatrix->GetLambda();
+    double lmbdref = scmatrix->GetRefLambda();
+    double K = scmatrix->GetK();
+    double Kref = scmatrix->GetRefK();
+    int qlen = GetQuerySize();
+    int slen = GetSubjectSize();
+    int pspace = qlen * slen;
+    double qnos = logo_fst_.GetEffNoSequences();
+    double snos = logo_sec_.GetEffNoSequences();
+    double minos = SLC_MIN(qnos,snos);
+    double score = GetScore();
+    double expect, pair_expect, bitscore;//e-value and bit score
+    double rescale = 10.;
+    double pwscale = 80.;
+    double re = 0.0;
+    double red, val;
+    double p1, p2;
+    const double (*qtp)[NUMAA], (*stp)[NUMAA];
+    double qap[NUMAA], sap[NUMAA];
+    char   strbuf[KBYTE];
+    int qin, sin;
+    int n, c, r;
+
+    red = 0.0;
+    if( 0 ) {
+        //uncomment when in use
+        for( r = 0; r < effnoress; r++ ) {
+            p1 = logo_fst_.GetPostProbsAt(r);
+            p2 = logo_sec_.GetPostProbsAt(r);
+            if( p1 <= 0. || p2 <= 0. )
+                throw myruntime_error("ProfileAlignment: ComputeStatisticsHelper: "
+                                      "Invalid profile posterior probabilities.");
+            red += p1*log(p1/p2);
+            red += p2*log(p2/p1);
+        }
+        red = rescale * exp(-pwscale*0.5*red);
+    }
+    if( 0 && 0 < GetAlnSteps()) {
+        //not in use
+        for( qnos = 0.0, c = 0, n = path[GetAlnSteps()-1][nQuery]-1; n < path[0][nQuery]; n++, c++ )
+            qnos += logo_fst_.GetMIDExpNoObservationsAt( n, PS_M );
+        qnos /= double(c);
+        for( snos = 0.0, c = 0, n = path[GetAlnSteps()-1][nSbjct]-1; n < path[0][nSbjct]; n++, c++ )
+            snos += logo_sec_.GetMIDExpNoObservationsAt( n, PS_M );
+        snos /= double(c);
+        minos = SLC_MIN(qnos,snos);
+    }
+
+    //{{Helper methods:
+    //ComputeMixtureExpect( qnos, qlen, snos, slen, red, lmbd, score, &expect );
+    ComputeExpectHelper2( qnos, qlen, snos, slen, red, score, &expect );
+    //}}
+
+    if( expect < 0. ) {
+        sprintf(strbuf, "ProfileAlignment: ComputeStatisticsHelper: Invalid expect: %g.", expect );
+        throw myruntime_error( strbuf );
+    }
+    if( expect <= 0. )
+        bitscore = SLC_DBL_MAX;
+    else
+        bitscore = (log((double)scmatrix->GetSearchSpace())-log(expect))/LN2;
+
+
+    if( lmbd <= 0.0 || K < 0.0 )
+        pair_expect = Kref * pspace * exp(-lmbdref*score);
+    else
+        pair_expect = K * pspace * exp(-lmbd*score);
+
+
+    SetBitScore( bitscore );
+    SetRawExpectation( expect );//NOTE:changed
+    SetExpectPerAlignment( pair_expect );
+
+    SetReferenceExpectation( expect );
+    SetExpectation( expect );
+    SetPvalue( ComputePvalue( GetExpectation()));
+}
+
+
+
+// -------------------------------------------------------------------------
+// ComputeStatisticsObs: compute e-value and p-value
+//
+void ProfileAlignment::ComputeStatisticsObs()
 {
     const AbstractScoreMatrix*  scmatrix = GetScoreMatrix();
     if( scmatrix == NULL )
@@ -282,6 +1481,20 @@ void ProfileAlignment::ComputeStatistics()
     SetPvalue( ComputePvalue( GetExpectation()));
 }
 
+
+// -------------------------------------------------------------------------
+// ComputeStatistics: statistical significance
+//
+void ProfileAlignment::ComputeStatistics()
+{
+    int mod = GetModelSS18();
+    if( mod == mss18_unused )
+        ComputeStatisticsObs();
+    else
+        ComputeStatisticsSS18();
+    return;
+}
+
 // -------------------------------------------------------------------------
 // Run: steps to produce alignment between profiles
 // -------------------------------------------------------------------------
@@ -294,6 +1507,7 @@ void ProfileAlignment::Run( size_t nopros )
     MakeAlignmentPath();            //2.
     PostProcess();
     SetFinalScore( GetAlnScore());
+//     ComputeStatisticsTEST( nopros );
     ComputeStatistics();            //3.
 // fprintf( stderr, "%12.4g\n", GetRawExpectation());
 }
